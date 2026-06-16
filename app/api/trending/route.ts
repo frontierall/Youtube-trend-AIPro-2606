@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchTrending, fetchByCategory } from '@/lib/youtube';
+import { fetchTrending, fetchByCategorySearch, dedupeById } from '@/lib/youtube';
+
+type VideoItem = { id: string; statistics?: { viewCount?: string } };
 
 export async function GET(request: NextRequest) {
   const apiKey = request.headers.get('x-youtube-api-key');
@@ -10,19 +12,42 @@ export async function GET(request: NextRequest) {
   const categoryId = searchParams.get('categoryId') || '';
   const maxResults = Math.min(parseInt(searchParams.get('maxResults') || '50', 10), 100);
 
+  // 카테고리 지정 시: mostPopular + 키워드 검색을 병렬 호출 후 병합
+  if (categoryId) {
+    const [trendingResult, searchResult] = await Promise.allSettled([
+      fetchTrending(apiKey, regionCode, categoryId, maxResults),
+      fetchByCategorySearch(apiKey, regionCode, categoryId, maxResults),
+    ]);
+
+    const trendingItems: VideoItem[] =
+      trendingResult.status === 'fulfilled' ? (trendingResult.value.items ?? []) : [];
+    const searchItems: VideoItem[] =
+      searchResult.status === 'fulfilled' ? (searchResult.value.items ?? []) : [];
+
+    if (trendingItems.length === 0 && searchItems.length === 0) {
+      const msg =
+        trendingResult.status === 'rejected'
+          ? (trendingResult.reason as Error)?.message
+          : '해당 카테고리의 데이터를 찾을 수 없습니다.';
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
+
+    const merged = dedupeById([...trendingItems, ...searchItems])
+      .sort(
+        (a, b) =>
+          parseInt(b.statistics?.viewCount || '0') -
+          parseInt(a.statistics?.viewCount || '0')
+      )
+      .slice(0, maxResults);
+
+    return NextResponse.json({ items: merged });
+  }
+
+  // 카테고리 없는 일반 트렌딩
   try {
-    const data = await fetchTrending(apiKey, regionCode, categoryId, maxResults);
+    const data = await fetchTrending(apiKey, regionCode, '', maxResults);
     return NextResponse.json(data);
   } catch (error) {
-    // trending API가 특정 국가+카테고리 조합을 지원하지 않으면 search.list로 폴백
-    if (categoryId) {
-      try {
-        const fallback = await fetchByCategory(apiKey, regionCode, categoryId, maxResults);
-        return NextResponse.json(fallback);
-      } catch {
-        // 폴백도 실패하면 원래 에러 반환
-      }
-    }
     const message = error instanceof Error ? error.message : '급상승 동영상 조회 실패';
     return NextResponse.json({ error: message }, { status: 500 });
   }

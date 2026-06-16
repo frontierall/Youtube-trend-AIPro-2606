@@ -47,7 +47,7 @@ export async function fetchTrending(
   return { items: items.slice(0, maxResults) };
 }
 
-// search.list 기반 카테고리 조회 (trending API가 해당 국가/카테고리 조합을 지원하지 않을 때 폴백)
+// search.list 기반 카테고리 조회 (videoCategoryId 파라미터 방식)
 export async function fetchByCategory(
   key: string,
   regionCode: string,
@@ -76,6 +76,71 @@ export async function fetchByCategory(
     id: ids,
   });
   return ytFetch(key, 'videos', videoParams);
+}
+
+// 카테고리 ID → 검색 키워드 매핑 (videoCategoryId deprecated 대응)
+const CATEGORY_QUERIES: Record<string, string> = {
+  '1':  '영화 애니메이션',
+  '2':  '자동차 드라이브',
+  '10': '음악 뮤직비디오',
+  '15': '동물 반려동물',
+  '17': '스포츠 경기',
+  '19': '여행 관광',
+  '20': '게임 플레이',
+  '22': '일상 브이로그',
+  '23': '코미디 유머',
+  '24': '엔터테인먼트 예능',
+  '25': '뉴스 시사',
+  '26': '노하우 뷰티 요리',
+  '27': '교육 강의 공부 학습',
+  '28': '과학 기술 IT',
+  '29': '사회 캠페인',
+};
+
+// search.list 기반 카테고리 조회 (키워드 검색 방식 — 더 안정적)
+export async function fetchByCategorySearch(
+  key: string,
+  regionCode: string,
+  categoryId: string,
+  maxResults: number
+) {
+  const q = CATEGORY_QUERIES[categoryId];
+  const params: Record<string, string> = {
+    part: 'id',
+    type: 'video',
+    regionCode,
+    maxResults: String(Math.min(maxResults, 50)),
+    order: 'viewCount',
+  };
+  if (q) {
+    params.q = q;
+    params.relevanceLanguage = regionCode === 'KR' ? 'ko' : 'en';
+  } else {
+    params.videoCategoryId = categoryId;
+  }
+
+  const searchData = await ytFetch(key, 'search', new URLSearchParams(params));
+  const ids = (searchData.items ?? [])
+    .map((item: { id: { videoId: string } }) => item.id?.videoId)
+    .filter(Boolean)
+    .join(',');
+
+  if (!ids) return { items: [] };
+
+  return ytFetch(key, 'videos', new URLSearchParams({
+    part: 'snippet,statistics,contentDetails',
+    id: ids,
+  }));
+}
+
+// 중복 제거 (id 기준)
+export function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter(item => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 
 // ── Comments ──────────────────────────────────────────────────────────────────
