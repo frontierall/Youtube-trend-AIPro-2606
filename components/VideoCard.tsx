@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useState } from 'react';
 import { YouTubeVideo } from '@/types/youtube';
 import { formatViewCount, formatDuration, formatRelativeTime } from '@/lib/formatters';
 
@@ -10,9 +11,38 @@ interface Props {
   onCommentClick: (video: YouTubeVideo) => void;
   onAnalyzeClick?: (video: YouTubeVideo) => void;
   isSelectedForAnalysis?: boolean;
+  isFavorite?: boolean;
+  onFavoriteToggle?: (video: YouTubeVideo) => void;
 }
 
-export default function VideoCard({ video, rank, onCommentClick, onAnalyzeClick, isSelectedForAnalysis = false }: Props) {
+type CopyTarget = 'video' | 'channel' | null;
+
+async function copyText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
+
+export default function VideoCard({
+  video,
+  rank,
+  onCommentClick,
+  onAnalyzeClick,
+  isSelectedForAnalysis = false,
+  isFavorite = false,
+  onFavoriteToggle,
+}: Props) {
+  const [copied, setCopied] = useState<CopyTarget>(null);
   const thumb =
     video.snippet.thumbnails.medium?.url ||
     video.snippet.thumbnails.high?.url ||
@@ -26,6 +56,15 @@ export default function VideoCard({ video, rank, onCommentClick, onAnalyzeClick,
         : rank <= 10
           ? 'bg-red-500 text-white'
           : 'bg-gray-900/70 text-white';
+
+  const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
+  const channelUrl = `https://www.youtube.com/channel/${video.snippet.channelId}`;
+
+  const handleCopy = async (target: Exclude<CopyTarget, null>, value: string) => {
+    await copyText(value);
+    setCopied(target);
+    window.setTimeout(() => setCopied(null), 1400);
+  };
 
   return (
     <article className={`bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col group border ${
@@ -78,6 +117,43 @@ export default function VideoCard({ video, rank, onCommentClick, onAnalyzeClick,
           </span>
         </div>
 
+        <div className="mt-1 grid grid-cols-3 gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleCopy('video', videoUrl)}
+            className="flex items-center justify-center gap-1 rounded-lg bg-gray-50 px-2 py-1.5 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            title="영상 URL 복사"
+          >
+            <LinkIcon />
+            {copied === 'video' ? '복사됨' : '영상'}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleCopy('channel', channelUrl)}
+            className="flex items-center justify-center gap-1 rounded-lg bg-gray-50 px-2 py-1.5 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            title="채널 URL 복사"
+          >
+            <LinkIcon />
+            {copied === 'channel' ? '복사됨' : '채널'}
+          </button>
+          {onFavoriteToggle && (
+            <button
+              type="button"
+              onClick={() => onFavoriteToggle(video)}
+              className={`flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                isFavorite
+                  ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+              title={isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+              aria-pressed={isFavorite}
+            >
+              <StarIcon filled={isFavorite} />
+              {isFavorite ? '저장됨' : '저장'}
+            </button>
+          )}
+        </div>
+
         <div className="mt-1 grid grid-cols-1 gap-1.5">
           {onAnalyzeClick && (
             <button
@@ -105,6 +181,22 @@ export default function VideoCard({ video, rank, onCommentClick, onAnalyzeClick,
         </div>
       </div>
     </article>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.5 6H15a5 5 0 010 10h-1.5m-3 0H9A5 5 0 019 6h1.5m-2 5h7" />
+    </svg>
+  );
+}
+
+function StarIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg className="w-3 h-3" fill={filled ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.48 3.499a.6.6 0 011.04 0l2.33 4.72a.6.6 0 00.452.328l5.21.757a.6.6 0 01.332 1.023l-3.77 3.675a.6.6 0 00-.172.531l.89 5.19a.6.6 0 01-.87.632l-4.66-2.45a.6.6 0 00-.558 0l-4.66 2.45a.6.6 0 01-.87-.632l.89-5.19a.6.6 0 00-.172-.531l-3.77-3.675a.6.6 0 01.332-1.023l5.21-.757a.6.6 0 00.452-.328l2.33-4.72z" />
+    </svg>
   );
 }
 

@@ -1,11 +1,14 @@
-export type TopMenu = 'trend' | 'analysis' | 'data-analysis' | 'ai' | 'settings';
+export type TopMenu = 'trend' | 'analysis' | 'data-analysis' | 'ai' | 'dashboard' | 'compare' | 'report' | 'settings';
 
 const ITEMS: { id: TopMenu; label: string; icon: string }[] = [
-  { id: 'trend', label: '트렌드', icon: '🔥' },
-  { id: 'analysis', label: '채널 및 영상 분석', icon: '📊' },
-  { id: 'data-analysis', label: '데이터 분석', icon: '🔬' },
-  { id: 'ai', label: 'AI 분석', icon: '🤖' },
-  { id: 'settings', label: '설정', icon: '⚙️' },
+  { id: 'dashboard',    label: '대시보드',        icon: '📌' },
+  { id: 'trend',        label: '트렌드',           icon: '🔥' },
+  { id: 'analysis',     label: '채널 및 영상 분석', icon: '📊' },
+  { id: 'data-analysis',label: '데이터 분석',      icon: '🔬' },
+  { id: 'compare',      label: '국가 비교',        icon: '🌍' },
+  { id: 'ai',           label: 'AI 분석',          icon: '🤖' },
+  { id: 'report',       label: '리포트',           icon: '📋' },
+  { id: 'settings',     label: '설정',             icon: '⚙️' },
 ];
 
 interface Props {
@@ -15,8 +18,8 @@ interface Props {
 
 export default function TopNav({ active, onChange }: Props) {
   return (
-    <nav className="bg-white border-b border-gray-200">
-      <div className="px-4 flex items-center gap-1">
+    <nav className="bg-white border-b border-gray-200 overflow-x-auto">
+      <div className="px-4 flex items-center gap-1 min-w-max">
         {ITEMS.map((item) => (
           <button
             key={item.id}

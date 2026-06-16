@@ -22,6 +22,9 @@ import EngagementAnalysis from '@/components/data-analysis/EngagementAnalysis';
 import ContentPattern from '@/components/data-analysis/ContentPattern';
 import DataAnalysisReportButton from '@/components/data-analysis/DataAnalysisReportButton';
 import StatisticsAnalysis from '@/components/data-analysis/StatisticsAnalysis';
+import DashboardPage from '@/components/DashboardPage';
+import CountryCompare from '@/components/compare/CountryCompare';
+import ReportHub from '@/components/ReportHub';
 import SettingsPage, {
   DEFAULT_APP_SETTINGS,
   type AppSettings,
@@ -33,16 +36,20 @@ import { useAiApiKey } from '@/hooks/useAiApiKey';
 import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
 
 type SideMenu =
-  | 'trending-all' | 'trending-education' | 'keyword'
+  | 'trending-all' | 'trending-education' | 'keyword' | 'favorites'
   | 'channel' | 'video'
   | 'snapshot' | 'engagement' | 'content-pattern' | 'statistics'
+  | 'compare-side' | 'compare-common' | 'compare-category'
   | 'ai-summary' | 'ai-comments' | 'ai-strategy';
 
-const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: string; icon: string }[]> = {
+type SideNavMenu = Exclude<TopMenu, 'settings' | 'dashboard' | 'report'>;
+
+const SIDE_MENUS: Record<SideNavMenu, { id: SideMenu; label: string; icon: string }[]> = {
   trend: [
     { id: 'trending-all', label: '전체 트렌딩 TOP 50', icon: '🔥' },
     { id: 'trending-education', label: '교육 TOP 30', icon: '📚' },
     { id: 'keyword', label: '키워드 분석', icon: '🔑' },
+    { id: 'favorites', label: '즐겨찾기', icon: '★' },
   ],
   analysis: [
     { id: 'channel', label: '채널 분석', icon: '📺' },
@@ -54,6 +61,11 @@ const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: st
     { id: 'content-pattern', label: '콘텐츠 패턴', icon: '🎯' },
     { id: 'statistics', label: '통계 분석', icon: '📉' },
   ],
+  compare: [
+    { id: 'compare-side',     label: '나란히 보기',   icon: '⚡' },
+    { id: 'compare-common',   label: '공통 영상',     icon: '🔗' },
+    { id: 'compare-category', label: '카테고리 비교', icon: '📊' },
+  ],
   ai: [
     { id: 'ai-summary', label: 'AI 트렌드 요약', icon: '🤖' },
     { id: 'ai-comments', label: 'AI 댓글 분석', icon: '💬' },
@@ -62,6 +74,20 @@ const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: st
 };
 
 const EDUCATION_CATEGORY_ID = '27';
+const FAVORITES_STORAGE_KEY = 'yt-trend-favorite-videos';
+
+function loadFavoriteVideos(): YouTubeVideo[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as YouTubeVideo[];
+    return Array.isArray(parsed) ? parsed.filter((video) => video?.id) : [];
+  } catch {
+    localStorage.removeItem(FAVORITES_STORAGE_KEY);
+    return [];
+  }
+}
 
 async function loadTrending(
   apiKey: string,
@@ -127,6 +153,7 @@ export default function HomePage() {
 
   const [trendingVideos, setTrendingVideos] = useState<YouTubeVideo[]>([]);
   const [educationVideos, setEducationVideos] = useState<YouTubeVideo[]>([]);
+  const [favoriteVideos, setFavoriteVideos] = useState<YouTubeVideo[]>(loadFavoriteVideos);
   const [categories, setCategories] = useState<YouTubeCategory[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(false);
   const [educationLoading, setEducationLoading] = useState(false);
@@ -216,7 +243,15 @@ export default function HomePage() {
   const handleTopMenuChange = (menu: TopMenu) => {
     startTransition(() => {
       setTopMenu(menu);
-      if (menu !== 'settings') setSideMenu(SIDE_MENUS[menu][0].id);
+      if (menu in SIDE_MENUS) setSideMenu(SIDE_MENUS[menu as SideNavMenu][0].id);
+      setSelectedAiVideo(null);
+    });
+  };
+
+  const handleNavigate = (tab: string, side: string) => {
+    startTransition(() => {
+      setTopMenu(tab as TopMenu);
+      setSideMenu(side as SideMenu);
       setSelectedAiVideo(null);
     });
   };
@@ -240,16 +275,32 @@ export default function HomePage() {
     if (sideMenu === 'keyword') fetchTrending(apiKey, regionCode, '', maxResults);
   };
 
-  const isTrend = topMenu === 'trend';
-  const isSettings = topMenu === 'settings';
-  const isAi = topMenu === 'ai';
-  const isDataAnalysis = topMenu === 'data-analysis';
-  const isKeyword = sideMenu === 'keyword';
-  const showAiBanner = isAi && aiLoaded && (!aiApiKey || aiBannerOpen);
-  const videos = sideMenu === 'trending-education' ? educationVideos : trendingVideos;
-  const loading = sideMenu === 'trending-education' ? educationLoading : trendingLoading;
-  const error = sideMenu === 'trending-education' ? educationError : trendingError;
-  const showFilterBar = isTrend;
+  const handleFavoriteToggle = (video: YouTubeVideo) => {
+    setFavoriteVideos((current) => {
+      const exists = current.some((item) => item.id === video.id);
+      const next = exists
+        ? current.filter((item) => item.id !== video.id)
+        : [video, ...current];
+      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const isTrend       = topMenu === 'trend';
+  const isSettings    = topMenu === 'settings';
+  const isDashboard   = topMenu === 'dashboard';
+  const isCompare     = topMenu === 'compare';
+  const isReport      = topMenu === 'report';
+  const isAi          = topMenu === 'ai';
+  const isDataAnalysis= topMenu === 'data-analysis';
+  const isKeyword     = sideMenu === 'keyword';
+  const showAiBanner  = isAi && aiLoaded && (!aiApiKey || aiBannerOpen);
+  const favoriteVideoIds = new Set(favoriteVideos.map((video) => video.id));
+  const isFavorites = sideMenu === 'favorites';
+  const videos = isFavorites ? favoriteVideos : sideMenu === 'trending-education' ? educationVideos : trendingVideos;
+  const loading = isFavorites ? false : sideMenu === 'trending-education' ? educationLoading : trendingLoading;
+  const error = isFavorites ? null : sideMenu === 'trending-education' ? educationError : trendingError;
+  const showFilterBar = isTrend && !isFavorites;
 
   if (!loaded || !settingsLoaded || !aiLoaded) return null;
 
@@ -282,9 +333,9 @@ export default function HomePage() {
       {/* Body: sidebar + content */}
       <div className="flex flex-1">
         {/* Left sidebar (하위 카테고리) */}
-        {!isSettings && (
+        {!isSettings && !isDashboard && !isReport && topMenu in SIDE_MENUS && (
           <SideNav
-            items={SIDE_MENUS[topMenu]}
+            items={SIDE_MENUS[topMenu as SideNavMenu]}
             active={sideMenu}
             onChange={(id) => startTransition(() => {
               setSideMenu(id as SideMenu);
@@ -337,6 +388,29 @@ export default function HomePage() {
               ) : (
                 <SettingsAuthGate onSuccess={() => setSettingsUnlocked(true)} />
               )
+            )}
+
+            {/* 대시보드 */}
+            {apiKey && isDashboard && (
+              <DashboardPage
+                videos={trendingVideos}
+                regionCode={regionCode}
+                onNavigate={handleNavigate}
+              />
+            )}
+
+            {/* 국가 비교 */}
+            {apiKey && isCompare && (
+              <CountryCompare apiKey={apiKey} activeSide={sideMenu} />
+            )}
+
+            {/* 리포트 허브 */}
+            {isReport && (
+              <ReportHub
+                videos={trendingVideos}
+                eduVideos={educationVideos}
+                regionCode={regionCode}
+              />
             )}
 
             {/* Analysis pages */}
@@ -416,7 +490,11 @@ export default function HomePage() {
                   <div>
                     {!loading && !error && videos.length > 0 && (
                       <p className="text-sm text-gray-500">
-                        {sideMenu === 'trending-all' ? '급상승 동영상' : '교육 분야 인기 동영상'}{' '}
+                        {sideMenu === 'trending-all'
+                          ? '급상승 동영상'
+                          : isFavorites
+                            ? '즐겨찾기 영상'
+                            : '교육 분야 인기 동영상'}{' '}
                         <span className="font-semibold text-gray-800">{videos.length}개</span>
                       </p>
                     )}
@@ -433,9 +511,11 @@ export default function HomePage() {
                       reportTitle={
                         sideMenu === 'trending-all'
                           ? `전체 트렌딩 TOP${videos.length} ${regionCode}`
+                          : isFavorites
+                            ? `즐겨찾기 영상 ${videos.length}개`
                           : `교육 TOP30 ${regionCode}`
                       }
-                      reportSubtitle={`${regionCode} 기준`}
+                      reportSubtitle={isFavorites ? '로컬 저장 목록' : `${regionCode} 기준`}
                     />
                   )}
                 </div>
@@ -483,33 +563,46 @@ export default function HomePage() {
                             onCommentClick={setSelectedVideo}
                             onAnalyzeClick={setSelectedAiVideo}
                             isSelectedForAnalysis={selectedAiVideo?.id === video.id}
+                            isFavorite={favoriteVideoIds.has(video.id)}
+                            onFavoriteToggle={handleFavoriteToggle}
                           />
                         ))}
                       </div>
                     </div>
-                    <TrendAiInsightsPanel
-                      videos={videos}
-                      selectedVideo={selectedAiVideo}
-                      categories={categories}
-                      regionCode={regionCode}
-                      categoryId={sideMenu === 'trending-education' ? EDUCATION_CATEGORY_ID : categoryId}
-                      openAiApiKey={settings.openAiApiKey}
-                      model={settings.aiModel}
-                      language={settings.aiLanguage}
-                      saveAnalysis={settings.saveAiAnalysis}
-                      loading={loading}
-                      onOpenSettings={() => handleTopMenuChange('settings')}
-                      onClearSelectedVideo={() => setSelectedAiVideo(null)}
-                    />
+                    {!isFavorites && (
+                      <TrendAiInsightsPanel
+                        videos={videos}
+                        selectedVideo={selectedAiVideo}
+                        categories={categories}
+                        regionCode={regionCode}
+                        categoryId={sideMenu === 'trending-education' ? EDUCATION_CATEGORY_ID : categoryId}
+                        openAiApiKey={settings.openAiApiKey}
+                        model={settings.aiModel}
+                        language={settings.aiLanguage}
+                        saveAnalysis={settings.saveAiAnalysis}
+                        loading={loading}
+                        onOpenSettings={() => handleTopMenuChange('settings')}
+                        onClearSelectedVideo={() => setSelectedAiVideo(null)}
+                      />
+                    )}
                   </div>
                 )}
 
                 {!loading && !error && videos.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
                     <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      {isFavorites ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                          d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                      ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      )}
                     </svg>
-                    <p className="text-sm">표시할 동영상이 없습니다.</p>
+                    <p className="text-sm">
+                      {isFavorites
+                        ? '아직 즐겨찾기한 영상이 없습니다. 트렌딩 영상의 ★ 버튼을 눌러보세요.'
+                        : '표시할 동영상이 없습니다.'}
+                    </p>
                   </div>
                 )}
               </>
