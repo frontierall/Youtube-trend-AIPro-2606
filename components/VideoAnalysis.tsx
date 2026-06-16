@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { YouTubeVideo, YouTubeCommentThread } from '@/types/youtube';
 import { formatViewCount, formatDuration, formatRelativeTime } from '@/lib/formatters';
+import ReportButton from '@/components/ReportButton';
 
 interface Props {
   apiKey: string;
@@ -72,7 +73,17 @@ export default function VideoAnalysis({ apiKey }: Props) {
 
   return (
     <div className="p-6 max-w-5xl">
-      <h2 className="text-base font-bold text-gray-800 mb-4">영상 분석</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-bold text-gray-800">영상 분석</h2>
+        {video && !loading && (
+          <ReportButton
+            videos={[video]}
+            comments={comments}
+            reportTitle={video.snippet.title}
+            reportSubtitle={video.snippet.channelTitle}
+          />
+        )}
+      </div>
 
       {/* Search bar */}
       <div className="flex gap-2 mb-6">

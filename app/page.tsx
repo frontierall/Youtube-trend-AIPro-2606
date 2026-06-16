@@ -10,6 +10,7 @@ import VideoCard from '@/components/VideoCard';
 import CommentsModal from '@/components/CommentsModal';
 import ChannelAnalysis from '@/components/ChannelAnalysis';
 import VideoAnalysis from '@/components/VideoAnalysis';
+import ReportButton from '@/components/ReportButton';
 import { useApiKey } from '@/hooks/useApiKey';
 import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
 
@@ -250,18 +251,31 @@ export default function HomePage() {
             {/* Trending content */}
             {apiKey && isTrend && (
               <>
-                <div className="flex items-center justify-between mb-4 min-h-[24px]">
+                <div className="flex items-center justify-between mb-4 min-h-[36px]">
+                  <div>
+                    {!loading && !error && videos.length > 0 && (
+                      <p className="text-sm text-gray-500">
+                        {sideMenu === 'trending-all' ? '급상승 동영상' : '교육 분야 인기 동영상'}{' '}
+                        <span className="font-semibold text-gray-800">{videos.length}개</span>
+                      </p>
+                    )}
+                    {loading && videos.length > 0 && (
+                      <p className="text-sm text-gray-400 flex items-center gap-2">
+                        <span className="w-3.5 h-3.5 border-2 border-red-200 border-t-red-500 rounded-full animate-spin inline-block" />
+                        업데이트 중...
+                      </p>
+                    )}
+                  </div>
                   {!loading && !error && videos.length > 0 && (
-                    <p className="text-sm text-gray-500">
-                      {sideMenu === 'trending-all' ? '급상승 동영상' : '교육 분야 인기 동영상'}{' '}
-                      <span className="font-semibold text-gray-800">{videos.length}개</span>
-                    </p>
-                  )}
-                  {loading && videos.length > 0 && (
-                    <p className="text-sm text-gray-400 flex items-center gap-2">
-                      <span className="w-3.5 h-3.5 border-2 border-red-200 border-t-red-500 rounded-full animate-spin inline-block" />
-                      업데이트 중...
-                    </p>
+                    <ReportButton
+                      videos={videos}
+                      reportTitle={
+                        sideMenu === 'trending-all'
+                          ? `전체 트렌딩 TOP${videos.length} ${regionCode}`
+                          : `교육 TOP30 ${regionCode}`
+                      }
+                      reportSubtitle={`${regionCode} 기준`}
+                    />
                   )}
                 </div>
 

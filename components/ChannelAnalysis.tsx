@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { YouTubeChannel, YouTubeVideo } from '@/types/youtube';
 import { formatViewCount, formatRelativeTime, formatDuration } from '@/lib/formatters';
+import ReportButton from '@/components/ReportButton';
 
 interface Props {
   apiKey: string;
@@ -68,7 +69,16 @@ export default function ChannelAnalysis({ apiKey }: Props) {
 
   return (
     <div className="p-6 max-w-5xl">
-      <h2 className="text-base font-bold text-gray-800 mb-4">채널 분석</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-bold text-gray-800">채널 분석</h2>
+        {channel && !loading && (
+          <ReportButton
+            channel={channel}
+            channelVideos={videos}
+            reportTitle={`채널 분석 · ${channel.snippet.title}`}
+          />
+        )}
+      </div>
 
       {/* Search bar */}
       <div className="flex gap-2 mb-6">
