@@ -8,9 +8,11 @@ interface Props {
   video: YouTubeVideo;
   rank: number;
   onCommentClick: (video: YouTubeVideo) => void;
+  onAnalyzeClick?: (video: YouTubeVideo) => void;
+  isSelectedForAnalysis?: boolean;
 }
 
-export default function VideoCard({ video, rank, onCommentClick }: Props) {
+export default function VideoCard({ video, rank, onCommentClick, onAnalyzeClick, isSelectedForAnalysis = false }: Props) {
   const thumb =
     video.snippet.thumbnails.medium?.url ||
     video.snippet.thumbnails.high?.url ||
@@ -26,7 +28,9 @@ export default function VideoCard({ video, rank, onCommentClick }: Props) {
           : 'bg-gray-900/70 text-white';
 
   return (
-    <article className="bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col group border border-gray-100">
+    <article className={`bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden flex flex-col group border ${
+      isSelectedForAnalysis ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-100'
+    }`}>
       {/* Thumbnail */}
       <a
         href={`https://www.youtube.com/watch?v=${video.id}`}
@@ -74,18 +78,41 @@ export default function VideoCard({ video, rank, onCommentClick }: Props) {
           </span>
         </div>
 
-        <button
-          onClick={() => onCommentClick(video)}
-          className="mt-1 flex items-center justify-center gap-1.5 w-full text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 py-1.5 rounded-lg transition-colors"
-        >
-          <CommentIcon />
-          댓글 보기
-          {video.statistics.commentCount && (
-            <span className="text-blue-400">({formatViewCount(video.statistics.commentCount)})</span>
+        <div className="mt-1 grid grid-cols-1 gap-1.5">
+          {onAnalyzeClick && (
+            <button
+              onClick={() => onAnalyzeClick(video)}
+              className={`flex items-center justify-center gap-1.5 w-full text-xs font-medium py-1.5 rounded-lg transition-colors ${
+                isSelectedForAnalysis
+                  ? 'text-blue-700 bg-blue-100'
+                  : 'text-gray-700 hover:text-gray-900 bg-gray-50 hover:bg-gray-100'
+              }`}
+            >
+              <SparkIcon />
+              {isSelectedForAnalysis ? 'AI 선택됨' : 'AI 분석 선택'}
+            </button>
           )}
-        </button>
+          <button
+            onClick={() => onCommentClick(video)}
+            className="flex items-center justify-center gap-1.5 w-full text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 py-1.5 rounded-lg transition-colors"
+          >
+            <CommentIcon />
+            댓글 보기
+            {video.statistics.commentCount && (
+              <span className="text-blue-400">({formatViewCount(video.statistics.commentCount)})</span>
+            )}
+          </button>
+        </div>
       </div>
     </article>
+  );
+}
+
+function SparkIcon() {
+  return (
+    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+    </svg>
   );
 }
 
