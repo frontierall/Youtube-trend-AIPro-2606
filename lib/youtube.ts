@@ -47,6 +47,37 @@ export async function fetchTrending(
   return { items: items.slice(0, maxResults) };
 }
 
+// search.list 기반 카테고리 조회 (trending API가 해당 국가/카테고리 조합을 지원하지 않을 때 폴백)
+export async function fetchByCategory(
+  key: string,
+  regionCode: string,
+  categoryId: string,
+  maxResults: number
+) {
+  const searchParams = new URLSearchParams({
+    part: 'id',
+    type: 'video',
+    videoCategoryId: categoryId,
+    regionCode,
+    maxResults: String(Math.min(maxResults, 50)),
+    order: 'viewCount',
+  });
+  const searchData = await ytFetch(key, 'search', searchParams);
+
+  const ids = (searchData.items ?? [])
+    .map((item: { id: { videoId: string } }) => item.id?.videoId)
+    .filter(Boolean)
+    .join(',');
+
+  if (!ids) return { items: [] };
+
+  const videoParams = new URLSearchParams({
+    part: 'snippet,statistics,contentDetails',
+    id: ids,
+  });
+  return ytFetch(key, 'videos', videoParams);
+}
+
 // ── Comments ──────────────────────────────────────────────────────────────────
 
 export async function fetchComments(key: string, videoId: string, maxResults: number) {
