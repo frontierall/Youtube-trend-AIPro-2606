@@ -259,7 +259,7 @@ export default function HomePage() {
       <Header hasApiKey={!!apiKey} onKeyClick={() => setBannerOpen(true)} />
 
       {/* YouTube API Key Banner */}
-      {showBanner && (
+      {showBanner && !isSettings && (
         <ApiBanner
           hasKey={!!apiKey}
           onSave={handleSaveKey}
