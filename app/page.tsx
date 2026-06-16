@@ -21,6 +21,7 @@ import TrendSnapshot from '@/components/data-analysis/TrendSnapshot';
 import EngagementAnalysis from '@/components/data-analysis/EngagementAnalysis';
 import ContentPattern from '@/components/data-analysis/ContentPattern';
 import DataAnalysisReportButton from '@/components/data-analysis/DataAnalysisReportButton';
+import StatisticsAnalysis from '@/components/data-analysis/StatisticsAnalysis';
 import SettingsPage, {
   DEFAULT_APP_SETTINGS,
   type AppSettings,
@@ -34,7 +35,7 @@ import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
 type SideMenu =
   | 'trending-all' | 'trending-education' | 'keyword'
   | 'channel' | 'video'
-  | 'snapshot' | 'engagement' | 'content-pattern'
+  | 'snapshot' | 'engagement' | 'content-pattern' | 'statistics'
   | 'ai-summary' | 'ai-comments' | 'ai-strategy';
 
 const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: string; icon: string }[]> = {
@@ -51,6 +52,7 @@ const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: st
     { id: 'snapshot', label: '트렌드 스냅샷', icon: '📊' },
     { id: 'engagement', label: '참여도 분석', icon: '📈' },
     { id: 'content-pattern', label: '콘텐츠 패턴', icon: '🎯' },
+    { id: 'statistics', label: '통계 분석', icon: '📉' },
   ],
   ai: [
     { id: 'ai-summary', label: 'AI 트렌드 요약', icon: '🤖' },
@@ -367,6 +369,9 @@ export default function HomePage() {
                 )}
                 {sideMenu === 'content-pattern' && (
                   <ContentPattern videos={trendingVideos} loading={trendingLoading} />
+                )}
+                {sideMenu === 'statistics' && (
+                  <StatisticsAnalysis videos={trendingVideos} loading={trendingLoading} />
                 )}
               </>
             )}

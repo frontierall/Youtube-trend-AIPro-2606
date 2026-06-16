@@ -5,8 +5,6 @@ import Image from 'next/image';
 import type { YouTubeVideo } from '@/types/youtube';
 import { formatViewCount, formatDuration } from '@/lib/formatters';
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-
 function parseSec(dur: string): number {
   const m = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!m) return 0;
@@ -19,7 +17,7 @@ function secToLabel(secs: number): string {
   return `${m}분 ${s}초`;
 }
 
-// ── sub-components ────────────────────────────────────────────────────────────
+const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 interface KpiCardProps { label: string; value: string; sub?: string; accent?: boolean }
 function KpiCard({ label, value, sub, accent }: KpiCardProps) {
@@ -32,14 +30,14 @@ function KpiCard({ label, value, sub, accent }: KpiCardProps) {
   );
 }
 
-interface BarRowProps { label: string; count: number; max: number; total: number }
-function BarRow({ label, count, max, total }: BarRowProps) {
+interface BarRowProps { label: string; count: number; max: number; total: number; color?: string }
+function BarRow({ label, count, max, total, color = 'bg-red-400' }: BarRowProps) {
   const pct = max ? Math.max(4, (count / max) * 100) : 0;
   return (
     <div className="flex items-center gap-2.5">
       <span className="text-xs text-gray-600 w-28 flex-shrink-0">{label}</span>
       <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-        <div className="bg-red-400 h-2 rounded-full" style={{ width: `${pct}%` }} />
+        <div className={`${color} h-2 rounded-full`} style={{ width: `${pct}%` }} />
       </div>
       <span className="text-xs font-medium text-gray-700 w-5 text-right">{count}</span>
       <span className="text-xs text-gray-400 w-9 text-right">{total ? `${Math.round(count / total * 100)}%` : ''}</span>
@@ -47,18 +45,17 @@ function BarRow({ label, count, max, total }: BarRowProps) {
   );
 }
 
-// ── skeleton / empty ──────────────────────────────────────────────────────────
-
 function Skeleton() {
   return (
     <div className="p-5 max-w-5xl space-y-5 animate-pulse">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-2xl" />)}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-2xl" />)}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {Array.from({ length: 2 }).map((_, i) => <div key={i} className="h-52 bg-gray-100 rounded-2xl" />)}
       </div>
-      <div className="h-40 bg-gray-100 rounded-2xl" />
+      <div className="h-32 bg-gray-100 rounded-2xl" />
+      <div className="h-64 bg-gray-100 rounded-2xl" />
     </div>
   );
 }
@@ -75,8 +72,6 @@ function Empty() {
   );
 }
 
-// ── main component ────────────────────────────────────────────────────────────
-
 interface Props {
   videos: YouTubeVideo[];
   eduVideos: YouTubeVideo[];
@@ -89,17 +84,22 @@ export default function TrendSnapshot({ videos, eduVideos, regionCode, loading }
     if (!videos.length) return null;
 
     const toNum = (s?: string) => parseInt(s || '0') || 0;
-
     const viewArr = videos.map(v => toNum(v.statistics.viewCount));
-    const likeArr = videos.map(v => toNum(v.statistics.likeCount));
-    const commentArr = videos.map(v => toNum(v.statistics.commentCount));
     const durArr = videos.map(v => parseSec(v.contentDetails.duration));
 
     const totalViews = viewArr.reduce((a, b) => a + b, 0);
     const avgViews = totalViews / videos.length;
-    const likeRates = viewArr.map((v, i) => v ? likeArr[i] / v * 100 : 0);
+
+    const sorted = [...viewArr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const medianViews = sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+
+    const likeRates = viewArr.map((v, i) => v ? toNum(videos[i].statistics.likeCount) / v * 100 : 0);
     const avgLikeRate = likeRates.reduce((a, b) => a + b, 0) / videos.length;
-    const avgCommentRate = viewArr.map((v, i) => v ? commentArr[i] / v * 100 : 0)
+    const avgCommentRate = viewArr
+      .map((v, i) => v ? toNum(videos[i].statistics.commentCount) / v * 100 : 0)
       .reduce((a, b) => a + b, 0) / videos.length;
     const avgDurSec = durArr.reduce((a, b) => a + b, 0) / videos.length;
 
@@ -111,23 +111,27 @@ export default function TrendSnapshot({ videos, eduVideos, regionCode, loading }
       { label: '10만 미만',    count: viewArr.filter(v => v < 100_000).length },
     ];
 
-    // edu comparison
+    // #2 업로드 요일 분포
+    const dayBuckets = DAYS.map((label, idx) => ({
+      label,
+      count: videos.filter(v => new Date(v.snippet.publishedAt).getDay() === idx).length,
+    }));
+
     const eduViewArr = eduVideos.map(v => toNum(v.statistics.viewCount));
     const eduAvgViews = eduViewArr.length
-      ? eduViewArr.reduce((a, b) => a + b, 0) / eduViewArr.length
-      : 0;
+      ? eduViewArr.reduce((a, b) => a + b, 0) / eduViewArr.length : 0;
     const eduAvgLikeRate = eduViewArr.length
       ? eduViewArr.map((v, i) => v ? toNum(eduVideos[i].statistics.likeCount) / v * 100 : 0)
-          .reduce((a, b) => a + b, 0) / eduViewArr.length
-      : 0;
+          .reduce((a, b) => a + b, 0) / eduViewArr.length : 0;
 
-    const top3 = [...videos]
+    // #3 TOP 10
+    const top10 = [...videos]
       .sort((a, b) => toNum(b.statistics.viewCount) - toNum(a.statistics.viewCount))
-      .slice(0, 3);
+      .slice(0, 10);
 
     return {
-      totalViews, avgViews, avgLikeRate, avgCommentRate, avgDurSec,
-      viewBuckets, eduAvgViews, eduAvgLikeRate, top3,
+      totalViews, avgViews, medianViews, avgLikeRate, avgCommentRate, avgDurSec,
+      viewBuckets, dayBuckets, eduAvgViews, eduAvgLikeRate, top10,
     };
   }, [videos, eduVideos]);
 
@@ -135,6 +139,7 @@ export default function TrendSnapshot({ videos, eduVideos, regionCode, loading }
   if (!stats) return <Empty />;
 
   const maxBucket = Math.max(...stats.viewBuckets.map(b => b.count), 1);
+  const maxDay = Math.max(...stats.dayBuckets.map(b => b.count), 1);
 
   return (
     <div className="p-5 max-w-5xl space-y-5">
@@ -143,11 +148,12 @@ export default function TrendSnapshot({ videos, eduVideos, regionCode, loading }
         <span className="ml-1.5 text-gray-400 text-xs">({regionCode})</span>
       </p>
 
-      {/* KPI 카드 */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* KPI — 중앙값 추가 */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <KpiCard label="분석 영상 수" value={`${videos.length}개`} />
         <KpiCard label="총 조회수 합계" value={formatViewCount(String(Math.round(stats.totalViews)))} />
         <KpiCard label="평균 조회수" value={formatViewCount(String(Math.round(stats.avgViews)))} />
+        <KpiCard label="중앙값 조회수" value={formatViewCount(String(Math.round(stats.medianViews)))} sub="이상값 영향 제거" />
         <KpiCard label="평균 좋아요율" value={`${stats.avgLikeRate.toFixed(2)}%`} accent />
       </div>
 
@@ -177,8 +183,8 @@ export default function TrendSnapshot({ videos, eduVideos, regionCode, loading }
             <tbody className="text-sm divide-y divide-gray-50">
               <tr>
                 <td className="py-2.5 text-gray-700">전체 트렌딩</td>
-                <td className="py-2.5 text-right font-medium text-gray-900">{videos.length}개</td>
-                <td className="py-2.5 text-right font-medium text-gray-900">
+                <td className="py-2.5 text-right font-medium">{videos.length}개</td>
+                <td className="py-2.5 text-right font-medium">
                   {formatViewCount(String(Math.round(stats.avgViews)))}
                 </td>
                 <td className="py-2.5 text-right font-semibold text-red-500">
@@ -188,8 +194,8 @@ export default function TrendSnapshot({ videos, eduVideos, regionCode, loading }
               {eduVideos.length > 0 && (
                 <tr>
                   <td className="py-2.5 text-gray-700">📚 교육 TOP30</td>
-                  <td className="py-2.5 text-right font-medium text-gray-900">{eduVideos.length}개</td>
-                  <td className="py-2.5 text-right font-medium text-gray-900">
+                  <td className="py-2.5 text-right font-medium">{eduVideos.length}개</td>
+                  <td className="py-2.5 text-right font-medium">
                     {formatViewCount(String(Math.round(stats.eduAvgViews)))}
                   </td>
                   <td className="py-2.5 text-right font-semibold text-red-500">
@@ -199,29 +205,62 @@ export default function TrendSnapshot({ videos, eduVideos, regionCode, loading }
               )}
             </tbody>
           </table>
-
           <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-gray-400">평균 영상 길이</p>
-              <p className="text-sm font-bold text-gray-800 mt-0.5">
-                {secToLabel(stats.avgDurSec)}
-              </p>
+              <p className="text-sm font-bold text-gray-800 mt-0.5">{secToLabel(stats.avgDurSec)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400">평균 댓글율</p>
-              <p className="text-sm font-bold text-gray-800 mt-0.5">
-                {stats.avgCommentRate.toFixed(3)}%
-              </p>
+              <p className="text-sm font-bold text-gray-800 mt-0.5">{stats.avgCommentRate.toFixed(3)}%</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* TOP 3 */}
+      {/* #2 업로드 요일 분포 */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-800 mb-3">조회수 TOP 3 영상</h3>
+        <h3 className="text-sm font-semibold text-gray-800 mb-1">업로드 요일 분포</h3>
+        <p className="text-xs text-gray-400 mb-4">트렌딩 진입 영상의 최초 업로드 요일</p>
+        <div className="flex items-end gap-1.5 h-20">
+          {stats.dayBuckets.map(b => {
+            const pct = maxDay ? (b.count / maxDay) * 100 : 0;
+            const isWeekend = b.label === '토' || b.label === '일';
+            return (
+              <div key={b.label} className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-[11px] font-medium text-gray-600 h-4">
+                  {b.count > 0 ? b.count : ''}
+                </span>
+                <div className="w-full flex flex-col justify-end" style={{ height: '52px' }}>
+                  <div
+                    className={`w-full rounded-t-sm transition-all ${isWeekend ? 'bg-blue-400' : 'bg-red-400'}`}
+                    style={{ height: `${Math.max(pct, b.count > 0 ? 6 : 0)}%` }}
+                  />
+                </div>
+                <span className={`text-xs font-medium ${isWeekend ? 'text-blue-500' : 'text-gray-500'}`}>
+                  {b.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-4 mt-3">
+          <span className="flex items-center gap-1.5 text-xs text-gray-400">
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400" />평일
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-gray-400">
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-400" />주말
+          </span>
+        </div>
+      </div>
+
+      {/* #3 TOP 10 */}
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-800 mb-3">조회수 TOP 10 영상</h3>
+
+        {/* 1~3위: 썸네일 포함 */}
         <div className="space-y-2">
-          {stats.top3.map((v, i) => {
+          {stats.top10.slice(0, 3).map((v, i) => {
             const thumb = v.snippet.thumbnails.medium?.url || v.snippet.thumbnails.default?.url;
             const rankColor = ['text-yellow-500', 'text-gray-400', 'text-orange-400'][i];
             return (
@@ -251,6 +290,30 @@ export default function TrendSnapshot({ videos, eduVideos, regionCode, loading }
               </a>
             );
           })}
+        </div>
+
+        {/* 4~10위: 컴팩트 리스트 */}
+        <div className="border-t border-gray-100 mt-3 pt-3 space-y-0.5">
+          {stats.top10.slice(3).map((v, i) => (
+            <a
+              key={v.id}
+              href={`https://youtube.com/watch?v=${v.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors group"
+            >
+              <span className="text-xs font-bold text-gray-300 w-5 flex-shrink-0 text-right">{i + 4}</span>
+              <p className="flex-1 text-xs text-gray-700 truncate group-hover:text-red-600 transition-colors">
+                {v.snippet.title}
+              </p>
+              <span className="text-xs text-gray-400 flex-shrink-0 w-20 truncate text-right">
+                {v.snippet.channelTitle}
+              </span>
+              <span className="text-xs font-semibold text-gray-600 flex-shrink-0 w-16 text-right">
+                {formatViewCount(v.statistics.viewCount)}
+              </span>
+            </a>
+          ))}
         </div>
       </div>
     </div>
