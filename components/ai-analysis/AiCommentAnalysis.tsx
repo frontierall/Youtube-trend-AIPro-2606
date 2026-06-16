@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 interface Props {
   aiApiKey: string;
+  apiKey: string;
 }
 
 function extractVideoId(input: string): string | null {
@@ -24,7 +25,7 @@ interface SentimentResult {
   summary: string;
 }
 
-export default function AiCommentAnalysis({ aiApiKey }: Props) {
+export default function AiCommentAnalysis({ aiApiKey, apiKey }: Props) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -48,7 +49,7 @@ export default function AiCommentAnalysis({ aiApiKey }: Props) {
         headers: {
           'Content-Type': 'application/json',
           'x-ai-api-key': aiApiKey,
-          'x-youtube-api-key': '',
+          'x-youtube-api-key': apiKey,
         },
         body: JSON.stringify({ videoId }),
       });

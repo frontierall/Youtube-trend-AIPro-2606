@@ -353,7 +353,7 @@ export default function HomePage() {
               <AiTrendSummary videos={trendingVideos} aiApiKey={aiApiKey} regionCode={regionCode} />
             )}
             {apiKey && isAi && aiApiKey && sideMenu === 'ai-comments' && (
-              <AiCommentAnalysis aiApiKey={aiApiKey} />
+              <AiCommentAnalysis aiApiKey={aiApiKey} apiKey={apiKey} />
             )}
             {apiKey && isAi && aiApiKey && sideMenu === 'ai-strategy' && (
               <AiContentStrategy videos={trendingVideos} aiApiKey={aiApiKey} regionCode={regionCode} />
