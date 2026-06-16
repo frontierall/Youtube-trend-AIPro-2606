@@ -12,6 +12,10 @@ import ChannelAnalysis from '@/components/ChannelAnalysis';
 import VideoAnalysis from '@/components/VideoAnalysis';
 import ReportButton from '@/components/ReportButton';
 import KeywordAnalysis from '@/components/KeywordAnalysis';
+import AiApiBanner from '@/components/AiApiBanner';
+import AiTrendSummary from '@/components/ai-analysis/AiTrendSummary';
+import AiCommentAnalysis from '@/components/ai-analysis/AiCommentAnalysis';
+import AiContentStrategy from '@/components/ai-analysis/AiContentStrategy';
 import TrendAiInsightsPanel from '@/components/ai/TrendAiInsightsPanel';
 import TrendSnapshot from '@/components/data-analysis/TrendSnapshot';
 import EngagementAnalysis from '@/components/data-analysis/EngagementAnalysis';
@@ -22,6 +26,7 @@ import SettingsPage, {
   loadAppSettings,
 } from '@/components/settings/SettingsPage';
 import { useApiKey } from '@/hooks/useApiKey';
+import { useAiApiKey } from '@/hooks/useAiApiKey';
 import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
 
 type SideMenu =
