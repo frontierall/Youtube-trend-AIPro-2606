@@ -3,13 +3,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Header from '@/components/Header';
 import ApiBanner from '@/components/ApiBanner';
+import TopNav, { type TopMenu } from '@/components/TopNav';
+import SideNav from '@/components/SideNav';
 import FilterBar from '@/components/FilterBar';
 import VideoCard from '@/components/VideoCard';
 import CommentsModal from '@/components/CommentsModal';
+import ChannelAnalysis from '@/components/ChannelAnalysis';
+import VideoAnalysis from '@/components/VideoAnalysis';
 import { useApiKey } from '@/hooks/useApiKey';
 import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
 
-type Tab = 'trending' | 'education';
+type SideMenu = 'trending-all' | 'trending-education' | 'channel' | 'video';
+
+const SIDE_MENUS: Record<TopMenu, { id: SideMenu; label: string; icon: string }[]> = {
+  trend: [
+    { id: 'trending-all', label: '전체 트렌딩 TOP 50', icon: '🔥' },
+    { id: 'trending-education', label: '교육 TOP 30', icon: '📚' },
+  ],
+  analysis: [
+    { id: 'channel', label: '채널 분석', icon: '📺' },
+    { id: 'video', label: '영상 분석', icon: '🎬' },
+  ],
+};
 
 const EDUCATION_CATEGORY_ID = '27';
 
@@ -36,7 +51,7 @@ async function loadCategories(apiKey: string, regionCode: string): Promise<YouTu
   });
   const data = await res.json();
   if (!res.ok) return [];
-  return (data.items ?? []) as YouTubeCategory[];
+  return data.items ?? [];
 }
 
 function SkeletonGrid() {
@@ -58,12 +73,14 @@ function SkeletonGrid() {
 
 export default function HomePage() {
   const { apiKey, saveKey, clearKey, loaded } = useApiKey();
-
-  // Banner: always open when no key; manually toggled when key exists
   const [bannerOpen, setBannerOpen] = useState(false);
   const showBanner = !apiKey || bannerOpen;
 
-  const [tab, setTab] = useState<Tab>('trending');
+  // Navigation
+  const [topMenu, setTopMenu] = useState<TopMenu>('trend');
+  const [sideMenu, setSideMenu] = useState<SideMenu>('trending-all');
+
+  // Trend state
   const [regionCode, setRegionCode] = useState('KR');
   const [categoryId, setCategoryId] = useState('');
   const [maxResults, setMaxResults] = useState(50);
@@ -71,7 +88,6 @@ export default function HomePage() {
   const [trendingVideos, setTrendingVideos] = useState<YouTubeVideo[]>([]);
   const [educationVideos, setEducationVideos] = useState<YouTubeVideo[]>([]);
   const [categories, setCategories] = useState<YouTubeCategory[]>([]);
-
   const [trendingLoading, setTrendingLoading] = useState(false);
   const [educationLoading, setEducationLoading] = useState(false);
   const [trendingError, setTrendingError] = useState<string | null>(null);
@@ -116,14 +132,12 @@ export default function HomePage() {
     fetchEducation(key, region);
   }, [fetchCategories, fetchTrending, fetchEducation]);
 
-  // Load once API key is ready
   useEffect(() => {
     if (!loaded || !apiKey || initialized.current) return;
     initData(apiKey, regionCode, maxResults);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, apiKey]);
 
-  // Region change
   const prevRegion = useRef(regionCode);
   useEffect(() => {
     if (!initialized.current || prevRegion.current === regionCode) return;
@@ -135,7 +149,6 @@ export default function HomePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionCode]);
 
-  // Category / count change
   const prevCat = useRef(categoryId);
   const prevCount = useRef(maxResults);
   useEffect(() => {
@@ -147,39 +160,34 @@ export default function HomePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryId, maxResults]);
 
-  const handleRefresh = () => {
-    if (tab === 'trending') fetchTrending(apiKey, regionCode, categoryId, maxResults);
-    else fetchEducation(apiKey, regionCode);
+  const handleTopMenuChange = (menu: TopMenu) => {
+    setTopMenu(menu);
+    setSideMenu(SIDE_MENUS[menu][0].id);
   };
 
   const handleSaveKey = (key: string) => {
     saveKey(key);
     setBannerOpen(false);
-    if (!initialized.current) {
-      initData(key, regionCode, maxResults);
-    }
+    if (!initialized.current) initData(key, regionCode, maxResults);
   };
 
-  const handleClearKey = () => {
-    clearKey();
-    setTrendingVideos([]);
-    setEducationVideos([]);
-    initialized.current = false;
+  const handleRefresh = () => {
+    if (sideMenu === 'trending-all') fetchTrending(apiKey, regionCode, categoryId, maxResults);
+    if (sideMenu === 'trending-education') fetchEducation(apiKey, regionCode);
   };
 
-  const videos = tab === 'trending' ? trendingVideos : educationVideos;
-  const loading = tab === 'trending' ? trendingLoading : educationLoading;
-  const error = tab === 'trending' ? trendingError : educationError;
+  const isTrend = topMenu === 'trend';
+  const videos = sideMenu === 'trending-all' ? trendingVideos : educationVideos;
+  const loading = sideMenu === 'trending-all' ? trendingLoading : educationLoading;
+  const error = sideMenu === 'trending-all' ? trendingError : educationError;
+  const showFilterBar = isTrend;
 
   if (!loaded) return null;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
-      <Header
-        hasApiKey={!!apiKey}
-        onKeyClick={() => setBannerOpen(true)}
-      />
+      <Header hasApiKey={!!apiKey} onKeyClick={() => setBannerOpen(true)} />
 
       {/* API Key Banner */}
       {showBanner && (
@@ -190,105 +198,103 @@ export default function HomePage() {
         />
       )}
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4">
-          <nav className="flex -mb-px">
-            <TabButton active={tab === 'trending'} onClick={() => setTab('trending')} icon="🔥" label={`전체 트렌딩 TOP ${maxResults}`} />
-            <TabButton active={tab === 'education'} onClick={() => setTab('education')} icon="📚" label="교육 TOP 30" />
-          </nav>
-        </div>
-      </div>
+      {/* Top navigation (상위 카테고리) */}
+      <TopNav active={topMenu} onChange={handleTopMenuChange} />
 
-      {/* Filters */}
-      <FilterBar
-        regionCode={regionCode}
-        categoryId={categoryId}
-        categories={categories}
-        maxResults={maxResults}
-        showCategory={tab === 'trending'}
-        showMaxResults={tab === 'trending'}
-        loading={loading}
-        onRegionChange={setRegionCode}
-        onCategoryChange={setCategoryId}
-        onMaxResultsChange={setMaxResults}
-        onRefresh={handleRefresh}
-      />
+      {/* Body: sidebar + content */}
+      <div className="flex flex-1">
+        {/* Left sidebar (하위 카테고리) */}
+        <SideNav
+          items={SIDE_MENUS[topMenu]}
+          active={sideMenu}
+          onChange={(id) => setSideMenu(id as SideMenu)}
+        />
 
-      {/* Content */}
-      <main className="max-w-7xl mx-auto w-full px-4 py-5 flex-1">
-        {/* No key placeholder */}
-        {!apiKey && (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-300">
-            <svg className="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
-            <p className="text-sm">위 배너에서 API 키를 입력해주세요.</p>
-          </div>
-        )}
+        {/* Right content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* FilterBar — trend only, sticky */}
+          {showFilterBar && (
+            <FilterBar
+              regionCode={regionCode}
+              categoryId={categoryId}
+              categories={categories}
+              maxResults={maxResults}
+              showCategory={sideMenu === 'trending-all'}
+              showMaxResults={sideMenu === 'trending-all'}
+              loading={loading}
+              onRegionChange={setRegionCode}
+              onCategoryChange={setCategoryId}
+              onMaxResultsChange={setMaxResults}
+              onRefresh={handleRefresh}
+            />
+          )}
 
-        {apiKey && (
-          <>
-            {/* Result count / loading */}
-            <div className="flex items-center justify-between mb-4 min-h-[24px]">
-              {!loading && !error && videos.length > 0 && (
-                <p className="text-sm text-gray-500">
-                  {tab === 'trending' ? '급상승 동영상' : '교육 분야 인기 동영상'}{' '}
-                  <span className="font-semibold text-gray-800">{videos.length}개</span>
-                </p>
-              )}
-              {loading && videos.length > 0 && (
-                <p className="text-sm text-gray-400 flex items-center gap-2">
-                  <span className="w-3.5 h-3.5 border-2 border-red-200 border-t-red-500 rounded-full animate-spin inline-block" />
-                  업데이트 중...
-                </p>
-              )}
-            </div>
+          {/* Main content */}
+          <main className="flex-1 px-5 py-5">
+            {/* No key */}
+            {!apiKey && (
+              <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-300">
+                <svg className="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                <p className="text-sm">위 배너에서 API 키를 입력해주세요.</p>
+              </div>
+            )}
 
-            {/* Error */}
-            {error && !loading && (
-              <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
-                <p className="text-red-600 font-medium text-sm">{error}</p>
-                <div className="flex items-center justify-center gap-3 mt-3">
-                  <button onClick={handleRefresh} className="text-sm text-red-500 underline underline-offset-2">
-                    다시 시도
-                  </button>
-                  {error.includes('API') && (
-                    <button
-                      onClick={() => setBannerOpen(true)}
-                      className="text-sm text-gray-500 underline underline-offset-2"
-                    >
-                      API 키 변경
-                    </button>
+            {/* Analysis pages */}
+            {apiKey && sideMenu === 'channel' && <ChannelAnalysis apiKey={apiKey} />}
+            {apiKey && sideMenu === 'video' && <VideoAnalysis apiKey={apiKey} />}
+
+            {/* Trending content */}
+            {apiKey && isTrend && (
+              <>
+                <div className="flex items-center justify-between mb-4 min-h-[24px]">
+                  {!loading && !error && videos.length > 0 && (
+                    <p className="text-sm text-gray-500">
+                      {sideMenu === 'trending-all' ? '급상승 동영상' : '교육 분야 인기 동영상'}{' '}
+                      <span className="font-semibold text-gray-800">{videos.length}개</span>
+                    </p>
+                  )}
+                  {loading && videos.length > 0 && (
+                    <p className="text-sm text-gray-400 flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 border-2 border-red-200 border-t-red-500 rounded-full animate-spin inline-block" />
+                      업데이트 중...
+                    </p>
                   )}
                 </div>
-              </div>
-            )}
 
-            {/* Skeleton */}
-            {loading && videos.length === 0 && <SkeletonGrid />}
+                {error && !loading && (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
+                    <p className="text-red-600 font-medium text-sm">{error}</p>
+                    <button onClick={handleRefresh} className="mt-3 text-sm text-red-500 underline underline-offset-2">
+                      다시 시도
+                    </button>
+                  </div>
+                )}
 
-            {/* Video grid */}
-            {(!loading || videos.length > 0) && !error && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {videos.map((video, i) => (
-                  <VideoCard key={video.id} video={video} rank={i + 1} onCommentClick={setSelectedVideo} />
-                ))}
-              </div>
-            )}
+                {loading && videos.length === 0 && <SkeletonGrid />}
 
-            {/* Empty */}
-            {!loading && !error && videos.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-                <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                <p className="text-sm">표시할 동영상이 없습니다.</p>
-              </div>
+                {(!loading || videos.length > 0) && !error && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {videos.map((video, i) => (
+                      <VideoCard key={video.id} video={video} rank={i + 1} onCommentClick={setSelectedVideo} />
+                    ))}
+                  </div>
+                )}
+
+                {!loading && !error && videos.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
+                    <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-sm">표시할 동영상이 없습니다.</p>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-      </main>
+          </main>
+        </div>
+      </div>
 
       {/* Comments Modal */}
       {selectedVideo && (
@@ -299,18 +305,5 @@ export default function HomePage() {
         />
       )}
     </div>
-  );
-}
-
-function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: string; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-        active ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-      }`}
-    >
-      {icon} {label}
-    </button>
   );
 }

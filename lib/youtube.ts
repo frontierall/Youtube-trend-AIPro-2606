@@ -1,14 +1,16 @@
 const BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
-async function ytFetch(key: string, path: string, params: URLSearchParams, cache?: RequestInit['cache']) {
+async function ytFetch(key: string, path: string, params: URLSearchParams) {
   params.set('key', key);
-  const res = await fetch(`${BASE_URL}/${path}?${params}`, cache ? { cache } : {});
+  const res = await fetch(`${BASE_URL}/${path}?${params}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err?.error?.message || `YouTube API 오류 ${res.status}`);
   }
   return res.json();
 }
+
+// ── Trending ──────────────────────────────────────────────────────────────────
 
 export async function fetchTrendingPage(
   key: string,
@@ -45,6 +47,8 @@ export async function fetchTrending(
   return { items: items.slice(0, maxResults) };
 }
 
+// ── Comments ──────────────────────────────────────────────────────────────────
+
 export async function fetchComments(key: string, videoId: string, maxResults: number) {
   const params = new URLSearchParams({
     part: 'snippet',
@@ -55,7 +59,53 @@ export async function fetchComments(key: string, videoId: string, maxResults: nu
   return ytFetch(key, 'commentThreads', params);
 }
 
+// ── Categories ────────────────────────────────────────────────────────────────
+
 export async function fetchCategories(key: string, regionCode: string, hl: string) {
   const params = new URLSearchParams({ part: 'snippet', regionCode, hl });
   return ytFetch(key, 'videoCategories', params);
+}
+
+// ── Channel Analysis ──────────────────────────────────────────────────────────
+
+export async function fetchChannel(key: string, handleOrId: string) {
+  const params = new URLSearchParams({ part: 'snippet,statistics,contentDetails' });
+  if (/^UC[a-zA-Z0-9_-]{22}$/.test(handleOrId)) {
+    params.set('id', handleOrId);
+  } else {
+    params.set('forHandle', handleOrId.startsWith('@') ? handleOrId : `@${handleOrId}`);
+  }
+  return ytFetch(key, 'channels', params);
+}
+
+export async function fetchUploads(key: string, uploadsPlaylistId: string, maxResults = 12) {
+  const playlistParams = new URLSearchParams({
+    part: 'snippet',
+    playlistId: uploadsPlaylistId,
+    maxResults: String(maxResults),
+  });
+  const playlist = await ytFetch(key, 'playlistItems', playlistParams);
+
+  const ids = (playlist.items ?? [])
+    .map((item: { snippet: { resourceId: { videoId: string } } }) => item.snippet?.resourceId?.videoId)
+    .filter(Boolean)
+    .join(',');
+
+  if (!ids) return { items: [] };
+
+  const videoParams = new URLSearchParams({
+    part: 'snippet,statistics,contentDetails',
+    id: ids,
+  });
+  return ytFetch(key, 'videos', videoParams);
+}
+
+// ── Video Analysis ────────────────────────────────────────────────────────────
+
+export async function fetchVideoById(key: string, videoId: string) {
+  const params = new URLSearchParams({
+    part: 'snippet,statistics,contentDetails',
+    id: videoId,
+  });
+  return ytFetch(key, 'videos', params);
 }

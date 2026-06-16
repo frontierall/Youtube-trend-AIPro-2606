@@ -65,3 +65,30 @@ export interface YouTubeCategory {
     assignable: boolean;
   };
 }
+
+export interface YouTubeChannel {
+  id: string;
+  snippet: {
+    title: string;
+    description: string;
+    customUrl?: string;
+    publishedAt: string;
+    thumbnails: {
+      default: YouTubeThumbnail;
+      medium: YouTubeThumbnail;
+      high: YouTubeThumbnail;
+    };
+    country?: string;
+  };
+  statistics: {
+    viewCount: string;
+    subscriberCount: string;
+    hiddenSubscriberCount: boolean;
+    videoCount: string;
+  };
+  contentDetails: {
+    relatedPlaylists: {
+      uploads: string;
+    };
+  };
+}
