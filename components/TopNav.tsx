@@ -1,9 +1,10 @@
-export type TopMenu = 'trend' | 'analysis' | 'data-analysis' | 'settings';
+export type TopMenu = 'trend' | 'analysis' | 'data-analysis' | 'ai' | 'settings';
 
 const ITEMS: { id: TopMenu; label: string; icon: string }[] = [
   { id: 'trend', label: '트렌드', icon: '🔥' },
   { id: 'analysis', label: '채널 및 영상 분석', icon: '📊' },
   { id: 'data-analysis', label: '데이터 분석', icon: '🔬' },
+  { id: 'ai', label: 'AI 분석', icon: '🤖' },
   { id: 'settings', label: '설정', icon: '⚙️' },
 ];
 

@@ -12,6 +12,7 @@ import ChannelAnalysis from '@/components/ChannelAnalysis';
 import VideoAnalysis from '@/components/VideoAnalysis';
 import ReportButton from '@/components/ReportButton';
 import KeywordAnalysis from '@/components/KeywordAnalysis';
+import TrendAiInsightsPanel from '@/components/ai/TrendAiInsightsPanel';
 import TrendSnapshot from '@/components/data-analysis/TrendSnapshot';
 import EngagementAnalysis from '@/components/data-analysis/EngagementAnalysis';
 import ContentPattern from '@/components/data-analysis/ContentPattern';
@@ -26,7 +27,8 @@ import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
 type SideMenu =
   | 'trending-all' | 'trending-education' | 'keyword'
   | 'channel' | 'video'
-  | 'snapshot' | 'engagement' | 'content-pattern';
+  | 'snapshot' | 'engagement' | 'content-pattern'
+  | 'ai-summary' | 'ai-comments' | 'ai-strategy';
 
 const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: string; icon: string }[]> = {
   trend: [
@@ -42,6 +44,11 @@ const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: st
     { id: 'snapshot', label: '트렌드 스냅샷', icon: '📊' },
     { id: 'engagement', label: '참여도 분석', icon: '📈' },
     { id: 'content-pattern', label: '콘텐츠 패턴', icon: '🎯' },
+  ],
+  ai: [
+    { id: 'ai-summary', label: 'AI 트렌드 요약', icon: '🤖' },
+    { id: 'ai-comments', label: 'AI 댓글 분석', icon: '💬' },
+    { id: 'ai-strategy', label: 'AI 콘텐츠 전략', icon: '🎯' },
   ],
 };
 
@@ -92,7 +99,9 @@ function SkeletonGrid() {
 
 export default function HomePage() {
   const { apiKey, saveKey, clearKey, loaded } = useApiKey();
+  const { aiApiKey, saveKey: saveAiKey, loaded: aiLoaded } = useAiApiKey();
   const [bannerOpen, setBannerOpen] = useState(false);
+  const [aiBannerOpen, setAiBannerOpen] = useState(false);
   const showBanner = !apiKey || bannerOpen;
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
@@ -115,6 +124,7 @@ export default function HomePage() {
   const [educationError, setEducationError] = useState<string | null>(null);
 
   const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null);
+  const [selectedAiVideo, setSelectedAiVideo] = useState<YouTubeVideo | null>(null);
 
   const fetchTrending = useCallback(async (key: string, region: string, catId: string, count: number) => {
     setTrendingLoading(true);
@@ -196,6 +206,7 @@ export default function HomePage() {
     startTransition(() => {
       setTopMenu(menu);
       if (menu !== 'settings') setSideMenu(SIDE_MENUS[menu][0].id);
+      setSelectedAiVideo(null);
     });
   };
 
@@ -212,6 +223,7 @@ export default function HomePage() {
   };
 
   const handleRefresh = () => {
+    setSelectedAiVideo(null);
     if (sideMenu === 'trending-all') fetchTrending(apiKey, regionCode, categoryId, maxResults);
     if (sideMenu === 'trending-education') fetchEducation(apiKey, regionCode);
     if (sideMenu === 'keyword') fetchTrending(apiKey, regionCode, '', maxResults);
@@ -219,25 +231,36 @@ export default function HomePage() {
 
   const isTrend = topMenu === 'trend';
   const isSettings = topMenu === 'settings';
+  const isAi = topMenu === 'ai';
   const isKeyword = sideMenu === 'keyword';
+  const showAiBanner = isAi && aiLoaded && (!aiApiKey || aiBannerOpen);
   const videos = sideMenu === 'trending-education' ? educationVideos : trendingVideos;
   const loading = sideMenu === 'trending-education' ? educationLoading : trendingLoading;
   const error = sideMenu === 'trending-education' ? educationError : trendingError;
   const showFilterBar = isTrend;
 
-  if (!loaded || !settingsLoaded) return null;
+  if (!loaded || !settingsLoaded || !aiLoaded) return null;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <Header hasApiKey={!!apiKey} onKeyClick={() => setBannerOpen(true)} />
 
-      {/* API Key Banner */}
+      {/* YouTube API Key Banner */}
       {showBanner && (
         <ApiBanner
           hasKey={!!apiKey}
           onSave={handleSaveKey}
           onClose={apiKey ? () => setBannerOpen(false) : undefined}
+        />
+      )}
+
+      {/* AI API Key Banner */}
+      {showAiBanner && (
+        <AiApiBanner
+          hasKey={!!aiApiKey}
+          onSave={(key) => { saveAiKey(key); setAiBannerOpen(false); }}
+          onClose={aiApiKey ? () => setAiBannerOpen(false) : undefined}
         />
       )}
 
@@ -251,7 +274,10 @@ export default function HomePage() {
           <SideNav
             items={SIDE_MENUS[topMenu]}
             active={sideMenu}
-            onChange={(id) => startTransition(() => setSideMenu(id as SideMenu))}
+            onChange={(id) => startTransition(() => {
+              setSideMenu(id as SideMenu);
+              setSelectedAiVideo(null);
+            })}
           />
         )}
 
@@ -317,6 +343,17 @@ export default function HomePage() {
               <ContentPattern videos={trendingVideos} loading={trendingLoading} />
             )}
 
+            {/* AI analysis pages */}
+            {apiKey && isAi && aiApiKey && sideMenu === 'ai-summary' && (
+              <AiTrendSummary videos={trendingVideos} aiApiKey={aiApiKey} regionCode={regionCode} />
+            )}
+            {apiKey && isAi && aiApiKey && sideMenu === 'ai-comments' && (
+              <AiCommentAnalysis aiApiKey={aiApiKey} />
+            )}
+            {apiKey && isAi && aiApiKey && sideMenu === 'ai-strategy' && (
+              <AiContentStrategy videos={trendingVideos} aiApiKey={aiApiKey} regionCode={regionCode} />
+            )}
+
             {/* Keyword analysis */}
             {apiKey && !isSettings && isKeyword && (
               <KeywordAnalysis
@@ -366,13 +403,58 @@ export default function HomePage() {
                   </div>
                 )}
 
-                {loading && videos.length === 0 && <SkeletonGrid />}
+                {loading && videos.length === 0 && (
+                  <div className="flex flex-col xl:flex-row gap-5 items-start">
+                    <div className="flex-1 min-w-0 w-full">
+                      <SkeletonGrid />
+                    </div>
+                    <TrendAiInsightsPanel
+                      videos={videos}
+                      selectedVideo={selectedAiVideo}
+                      categories={categories}
+                      regionCode={regionCode}
+                      categoryId={sideMenu === 'trending-education' ? EDUCATION_CATEGORY_ID : categoryId}
+                      openAiApiKey={settings.openAiApiKey}
+                      model={settings.aiModel}
+                      language={settings.aiLanguage}
+                      saveAnalysis={settings.saveAiAnalysis}
+                      loading={loading}
+                      onOpenSettings={() => handleTopMenuChange('settings')}
+                      onClearSelectedVideo={() => setSelectedAiVideo(null)}
+                    />
+                  </div>
+                )}
 
-                {(!loading || videos.length > 0) && !error && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {videos.map((video, i) => (
-                      <VideoCard key={video.id} video={video} rank={i + 1} onCommentClick={setSelectedVideo} />
-                    ))}
+                {videos.length > 0 && !error && (
+                  <div className="flex flex-col xl:flex-row gap-5 items-start">
+                    <div className="flex-1 min-w-0 w-full">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+                        {videos.map((video, i) => (
+                          <VideoCard
+                            key={video.id}
+                            video={video}
+                            rank={i + 1}
+                            onCommentClick={setSelectedVideo}
+                            onAnalyzeClick={setSelectedAiVideo}
+                            isSelectedForAnalysis={selectedAiVideo?.id === video.id}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <TrendAiInsightsPanel
+                      videos={videos}
+                      selectedVideo={selectedAiVideo}
+                      categories={categories}
+                      regionCode={regionCode}
+                      categoryId={sideMenu === 'trending-education' ? EDUCATION_CATEGORY_ID : categoryId}
+                      openAiApiKey={settings.openAiApiKey}
+                      model={settings.aiModel}
+                      language={settings.aiLanguage}
+                      saveAnalysis={settings.saveAiAnalysis}
+                      loading={loading}
+                      onOpenSettings={() => handleTopMenuChange('settings')}
+                      onClearSelectedVideo={() => setSelectedAiVideo(null)}
+                    />
                   </div>
                 )}
 
