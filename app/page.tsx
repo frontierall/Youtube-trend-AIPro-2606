@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, startTransition, useState } from 'react';
 import Header from '@/components/Header';
 import ApiBanner from '@/components/ApiBanner';
 import TopNav, { type TopMenu } from '@/components/TopNav';
@@ -161,8 +161,10 @@ export default function HomePage() {
   }, [categoryId, maxResults]);
 
   const handleTopMenuChange = (menu: TopMenu) => {
-    setTopMenu(menu);
-    setSideMenu(SIDE_MENUS[menu][0].id);
+    startTransition(() => {
+      setTopMenu(menu);
+      setSideMenu(SIDE_MENUS[menu][0].id);
+    });
   };
 
   const handleSaveKey = (key: string) => {
@@ -207,7 +209,7 @@ export default function HomePage() {
         <SideNav
           items={SIDE_MENUS[topMenu]}
           active={sideMenu}
-          onChange={(id) => setSideMenu(id as SideMenu)}
+          onChange={(id) => startTransition(() => setSideMenu(id as SideMenu))}
         />
 
         {/* Right content */}
