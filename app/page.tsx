@@ -20,11 +20,13 @@ import TrendAiInsightsPanel from '@/components/ai/TrendAiInsightsPanel';
 import TrendSnapshot from '@/components/data-analysis/TrendSnapshot';
 import EngagementAnalysis from '@/components/data-analysis/EngagementAnalysis';
 import ContentPattern from '@/components/data-analysis/ContentPattern';
+import DataAnalysisReportButton from '@/components/data-analysis/DataAnalysisReportButton';
 import SettingsPage, {
   DEFAULT_APP_SETTINGS,
   type AppSettings,
   loadAppSettings,
 } from '@/components/settings/SettingsPage';
+import SettingsAuthGate from '@/components/settings/SettingsAuthGate';
 import { useApiKey } from '@/hooks/useApiKey';
 import { useAiApiKey } from '@/hooks/useAiApiKey';
 import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
@@ -109,6 +111,7 @@ export default function HomePage() {
   const [aiBannerOpen, setAiBannerOpen] = useState(false);
   const showBanner = !apiKey || bannerOpen;
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsUnlocked, setSettingsUnlocked] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
 
   // Navigation
@@ -237,6 +240,7 @@ export default function HomePage() {
   const isTrend = topMenu === 'trend';
   const isSettings = topMenu === 'settings';
   const isAi = topMenu === 'ai';
+  const isDataAnalysis = topMenu === 'data-analysis';
   const isKeyword = sideMenu === 'keyword';
   const showAiBanner = isAi && aiLoaded && (!aiApiKey || aiBannerOpen);
   const videos = sideMenu === 'trending-education' ? educationVideos : trendingVideos;
@@ -318,14 +322,18 @@ export default function HomePage() {
             )}
 
             {isSettings && (
-              <SettingsPage
-                apiKey={apiKey}
-                categories={categories}
-                settings={settings}
-                onSettingsChange={handleSettingsChange}
-                onSaveApiKey={handleSaveKey}
-                onClearApiKey={clearKey}
-              />
+              settingsUnlocked ? (
+                <SettingsPage
+                  apiKey={apiKey}
+                  categories={categories}
+                  settings={settings}
+                  onSettingsChange={handleSettingsChange}
+                  onSaveApiKey={handleSaveKey}
+                  onClearApiKey={clearKey}
+                />
+              ) : (
+                <SettingsAuthGate onSuccess={() => setSettingsUnlocked(true)} />
+              )
             )}
 
             {/* Analysis pages */}
@@ -333,19 +341,34 @@ export default function HomePage() {
             {apiKey && !isSettings && sideMenu === 'video' && <VideoAnalysis apiKey={apiKey} />}
 
             {/* Data analysis pages */}
-            {apiKey && !isSettings && sideMenu === 'snapshot' && (
-              <TrendSnapshot
-                videos={trendingVideos}
-                eduVideos={educationVideos}
-                regionCode={regionCode}
-                loading={trendingLoading}
-              />
-            )}
-            {apiKey && !isSettings && sideMenu === 'engagement' && (
-              <EngagementAnalysis videos={trendingVideos} loading={trendingLoading} />
-            )}
-            {apiKey && !isSettings && sideMenu === 'content-pattern' && (
-              <ContentPattern videos={trendingVideos} loading={trendingLoading} />
+            {apiKey && isDataAnalysis && (
+              <>
+                <div className="flex items-center justify-between px-5 pt-5 pb-1">
+                  <p className="text-xs text-gray-400 font-medium">
+                    {SIDE_MENUS['data-analysis'].find(m => m.id === sideMenu)?.icon}{' '}
+                    {SIDE_MENUS['data-analysis'].find(m => m.id === sideMenu)?.label}
+                  </p>
+                  <DataAnalysisReportButton
+                    videos={trendingVideos}
+                    eduVideos={educationVideos}
+                    regionCode={regionCode}
+                  />
+                </div>
+                {sideMenu === 'snapshot' && (
+                  <TrendSnapshot
+                    videos={trendingVideos}
+                    eduVideos={educationVideos}
+                    regionCode={regionCode}
+                    loading={trendingLoading}
+                  />
+                )}
+                {sideMenu === 'engagement' && (
+                  <EngagementAnalysis videos={trendingVideos} loading={trendingLoading} />
+                )}
+                {sideMenu === 'content-pattern' && (
+                  <ContentPattern videos={trendingVideos} loading={trendingLoading} />
+                )}
+              </>
             )}
 
             {/* AI analysis pages */}

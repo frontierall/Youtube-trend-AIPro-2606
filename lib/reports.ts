@@ -105,6 +105,274 @@ export function exportKeywordsToCSV(videos: YouTubeVideo[], label: string) {
   downloadCSV([header, ...rows], `키워드_${label}`);
 }
 
+// ── Data Analysis CSV exports ─────────────────────────────────────────────────
+
+function parseDurSec(dur: string): number {
+  const m = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return 0;
+  return parseInt(m[1] || '0') * 3600 + parseInt(m[2] || '0') * 60 + parseInt(m[3] || '0');
+}
+
+function daysDiff(dateStr: string): number {
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000);
+}
+
+export function exportSnapshotToCSV(videos: YouTubeVideo[], eduVideos: YouTubeVideo[], regionCode: string) {
+  const toNum = (s?: string) => parseInt(s || '0') || 0;
+  const viewArr = videos.map(v => toNum(v.statistics.viewCount));
+  const totalViews = viewArr.reduce((a, b) => a + b, 0);
+  const avgViews = videos.length ? totalViews / videos.length : 0;
+  const likeRates = videos.map((v, i) => viewArr[i] ? toNum(v.statistics.likeCount) / viewArr[i] * 100 : 0);
+  const avgLikeRate = likeRates.length ? likeRates.reduce((a, b) => a + b, 0) / likeRates.length : 0;
+  const commentRates = videos.map((v, i) => viewArr[i] ? toNum(v.statistics.commentCount) / viewArr[i] * 100 : 0);
+  const avgCommentRate = commentRates.length ? commentRates.reduce((a, b) => a + b, 0) / commentRates.length : 0;
+
+  const eduViewArr = eduVideos.map(v => toNum(v.statistics.viewCount));
+  const eduAvgViews = eduViewArr.length ? eduViewArr.reduce((a, b) => a + b, 0) / eduViewArr.length : 0;
+  const eduLikeRates = eduVideos.map((v, i) => eduViewArr[i] ? toNum(v.statistics.likeCount) / eduViewArr[i] * 100 : 0);
+  const eduAvgLikeRate = eduLikeRates.length ? eduLikeRates.reduce((a, b) => a + b, 0) / eduLikeRates.length : 0;
+
+  const buckets: [string, number][] = [
+    ['1억 이상',     viewArr.filter(v => v >= 100_000_000).length],
+    ['1000만~1억',   viewArr.filter(v => v >= 10_000_000 && v < 100_000_000).length],
+    ['100만~1000만', viewArr.filter(v => v >= 1_000_000 && v < 10_000_000).length],
+    ['10만~100만',   viewArr.filter(v => v >= 100_000 && v < 1_000_000).length],
+    ['10만 미만',    viewArr.filter(v => v < 100_000).length],
+  ];
+
+  const rows = [
+    ['[KPI 요약]', '', ''],
+    ['지표', '전체 트렌딩', '교육 TOP30'],
+    ['영상 수', videos.length, eduVideos.length],
+    ['총 조회수 합계', totalViews, eduViewArr.reduce((a, b) => a + b, 0)],
+    ['평균 조회수', Math.round(avgViews), Math.round(eduAvgViews)],
+    ['평균 좋아요율(%)', avgLikeRate.toFixed(2), eduAvgLikeRate.toFixed(2)],
+    ['평균 댓글율(%)', avgCommentRate.toFixed(3), ''],
+    [],
+    ['[조회수 구간 분포]'],
+    ['조회수 구간', '영상 수', '비율(%)'],
+    ...buckets.map(([l, c]) => [l, c, videos.length ? Math.round(c / videos.length * 100) : 0]),
+  ];
+  downloadCSV(rows, `트렌드스냅샷_${regionCode}`);
+}
+
+export function exportEngagementToCSV(videos: YouTubeVideo[], regionCode: string) {
+  const toNum = (s?: string) => parseInt(s || '0') || 0;
+  const withRates = videos.map(v => {
+    const views = toNum(v.statistics.viewCount);
+    return {
+      title: v.snippet.title,
+      channel: v.snippet.channelTitle,
+      views,
+      likes: toNum(v.statistics.likeCount),
+      comments: toNum(v.statistics.commentCount),
+      likeRate: views ? toNum(v.statistics.likeCount) / views * 100 : 0,
+      commentRate: views ? toNum(v.statistics.commentCount) / views * 100 : 0,
+    };
+  }).sort((a, b) => b.likeRate - a.likeRate);
+
+  const rows = [
+    ['순위', '제목', '채널', '조회수', '좋아요율(%)', '댓글율(%)'],
+    ...withRates.map((r, i) => [i + 1, r.title, r.channel, r.views, r.likeRate.toFixed(2), r.commentRate.toFixed(3)]),
+  ];
+  downloadCSV(rows, `참여도분석_${regionCode}`);
+}
+
+export function exportChannelPatternToCSV(videos: YouTubeVideo[], regionCode: string) {
+  const toNum = (s?: string) => parseInt(s || '0') || 0;
+  const channelMap: Record<string, { title: string; count: number; totalViews: number }> = {};
+  for (const v of videos) {
+    const id = v.snippet.channelId;
+    if (!channelMap[id]) channelMap[id] = { title: v.snippet.channelTitle, count: 0, totalViews: 0 };
+    channelMap[id].count++;
+    channelMap[id].totalViews += toNum(v.statistics.viewCount);
+  }
+  const channels = Object.values(channelMap).sort((a, b) => b.count - a.count);
+
+  const durLabels = ['쇼츠 (1분 미만)', '단편 (1~5분)', '중편 (5~10분)', '장편 (10~20분)', '초장편 (20분+)'];
+  const durCounts = [0, 0, 0, 0, 0];
+  for (const v of videos) {
+    const s = parseDurSec(v.contentDetails.duration);
+    if (s < 60) durCounts[0]++;
+    else if (s < 300) durCounts[1]++;
+    else if (s < 600) durCounts[2]++;
+    else if (s < 1200) durCounts[3]++;
+    else durCounts[4]++;
+  }
+
+  const ageLabels = ['오늘 (24시간 내)', '2~7일', '8~30일', '1~6개월', '6개월 이상'];
+  const ageCounts = [0, 0, 0, 0, 0];
+  for (const v of videos) {
+    const d = daysDiff(v.snippet.publishedAt);
+    if (d < 1) ageCounts[0]++;
+    else if (d <= 7) ageCounts[1]++;
+    else if (d <= 30) ageCounts[2]++;
+    else if (d <= 180) ageCounts[3]++;
+    else ageCounts[4]++;
+  }
+
+  const rows = [
+    ['[채널 순위]'],
+    ['순위', '채널명', '트렌딩 영상 수', '총 조회수'],
+    ...channels.map((c, i) => [i + 1, c.title, c.count, c.totalViews]),
+    [],
+    ['[영상 길이 분포]'],
+    ['영상 길이 구간', '영상 수', '비율(%)'],
+    ...durLabels.map((l, i) => [l, durCounts[i], videos.length ? Math.round(durCounts[i] / videos.length * 100) : 0]),
+    [],
+    ['[업로드 시점 분포]'],
+    ['업로드 시점 구간', '영상 수', '비율(%)'],
+    ...ageLabels.map((l, i) => [l, ageCounts[i], videos.length ? Math.round(ageCounts[i] / videos.length * 100) : 0]),
+  ];
+  downloadCSV(rows, `콘텐츠패턴_${regionCode}`);
+}
+
+// ── Data Analysis PDF ─────────────────────────────────────────────────────────
+
+export function printDataAnalysisReport(videos: YouTubeVideo[], eduVideos: YouTubeVideo[], regionCode: string) {
+  const toNum = (s?: string) => parseInt(s || '0') || 0;
+  const viewArr = videos.map(v => toNum(v.statistics.viewCount));
+  const totalViews = viewArr.reduce((a, b) => a + b, 0);
+  const avgViews = videos.length ? totalViews / videos.length : 0;
+  const likeRates = videos.map((v, i) => viewArr[i] ? toNum(v.statistics.likeCount) / viewArr[i] * 100 : 0);
+  const avgLikeRate = likeRates.length ? likeRates.reduce((a, b) => a + b, 0) / likeRates.length : 0;
+  const commentRates = videos.map((v, i) => viewArr[i] ? toNum(v.statistics.commentCount) / viewArr[i] * 100 : 0);
+  const avgCommentRate = commentRates.length ? commentRates.reduce((a, b) => a + b, 0) / commentRates.length : 0;
+
+  const eduViewArr = eduVideos.map(v => toNum(v.statistics.viewCount));
+  const eduAvgViews = eduViewArr.length ? eduViewArr.reduce((a, b) => a + b, 0) / eduViewArr.length : 0;
+  const eduLikeRates = eduVideos.map((v, i) => eduViewArr[i] ? toNum(v.statistics.likeCount) / eduViewArr[i] * 100 : 0);
+  const eduAvgLikeRate = eduLikeRates.length ? eduLikeRates.reduce((a, b) => a + b, 0) / eduLikeRates.length : 0;
+
+  const viewBuckets = [
+    ['1억 이상',     viewArr.filter(v => v >= 100_000_000).length],
+    ['1000만~1억',   viewArr.filter(v => v >= 10_000_000 && v < 100_000_000).length],
+    ['100만~1000만', viewArr.filter(v => v >= 1_000_000 && v < 10_000_000).length],
+    ['10만~100만',   viewArr.filter(v => v >= 100_000 && v < 1_000_000).length],
+    ['10만 미만',    viewArr.filter(v => v < 100_000).length],
+  ] as [string, number][];
+
+  const top5Engagement = [...videos]
+    .map((v, i) => ({ v, likeRate: likeRates[i], commentRate: commentRates[i] }))
+    .sort((a, b) => b.likeRate - a.likeRate)
+    .slice(0, 5);
+
+  const channelMap: Record<string, { title: string; count: number; totalViews: number }> = {};
+  for (const v of videos) {
+    const id = v.snippet.channelId;
+    if (!channelMap[id]) channelMap[id] = { title: v.snippet.channelTitle, count: 0, totalViews: 0 };
+    channelMap[id].count++;
+    channelMap[id].totalViews += toNum(v.statistics.viewCount);
+  }
+  const topChannels = Object.values(channelMap).sort((a, b) => b.count - a.count).slice(0, 8);
+
+  const durLabels = ['쇼츠 (<1분)', '단편 (1~5분)', '중편 (5~10분)', '장편 (10~20분)', '초장편 (20분+)'];
+  const durCounts = [0, 0, 0, 0, 0];
+  for (const v of videos) {
+    const s = parseDurSec(v.contentDetails.duration);
+    if (s < 60) durCounts[0]++;
+    else if (s < 300) durCounts[1]++;
+    else if (s < 600) durCounts[2]++;
+    else if (s < 1200) durCounts[3]++;
+    else durCounts[4]++;
+  }
+
+  const keywords = extractKeywords(videos).slice(0, 20);
+
+  const fmtNum = (n: number) => Math.round(n).toLocaleString('ko-KR');
+
+  const kpiGrid = `
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-label">분석 영상 수</div><div class="stat-value">${videos.length}개</div></div>
+      <div class="stat-box"><div class="stat-label">총 조회수 합계</div><div class="stat-value">${formatViewCount(String(Math.round(totalViews)))}</div></div>
+      <div class="stat-box"><div class="stat-label">평균 조회수</div><div class="stat-value">${formatViewCount(String(Math.round(avgViews)))}</div></div>
+      <div class="stat-box"><div class="stat-label">평균 좋아요율</div><div class="stat-value" style="color:#ef4444">${avgLikeRate.toFixed(2)}%</div></div>
+    </div>`;
+
+  const bucketRows = viewBuckets.map(([label, count]) =>
+    `<tr><td>${label}</td><td style="text-align:right">${count}</td><td style="text-align:right">${videos.length ? Math.round(count / videos.length * 100) : 0}%</td></tr>`
+  ).join('');
+
+  const eduRow = eduVideos.length
+    ? `<tr><td>📚 교육 TOP30</td><td style="text-align:right">${eduVideos.length}개</td><td style="text-align:right">${formatViewCount(String(Math.round(eduAvgViews)))}</td><td style="text-align:right;color:#ef4444">${eduAvgLikeRate.toFixed(2)}%</td></tr>`
+    : '';
+
+  const top5Rows = top5Engagement.map(({ v, likeRate, commentRate }, i) =>
+    `<tr><td>${i + 1}</td><td>${v.snippet.title.slice(0, 45)}${v.snippet.title.length > 45 ? '…' : ''}</td><td>${v.snippet.channelTitle}</td><td style="text-align:right;color:#ef4444">${likeRate.toFixed(2)}%</td><td style="text-align:right">${commentRate.toFixed(3)}%</td></tr>`
+  ).join('');
+
+  const channelRows = topChannels.map((c, i) =>
+    `<tr><td>${i + 1}</td><td>${c.title}</td><td style="text-align:right">${c.count}</td><td style="text-align:right">${formatViewCount(String(c.totalViews))}</td></tr>`
+  ).join('');
+
+  const durRows = durLabels.map((l, i) =>
+    `<tr><td>${l}</td><td style="text-align:right">${durCounts[i]}</td><td style="text-align:right">${videos.length ? Math.round(durCounts[i] / videos.length * 100) : 0}%</td></tr>`
+  ).join('');
+
+  const keywordTags = keywords.map((k, i) =>
+    `<span class="kw-tag ${i < 3 ? 'kw-top' : ''}">${k.word} <em>${k.count}</em></span>`
+  ).join('');
+
+  const body = `
+    <style>
+      .section { margin-top: 20px; }
+      .section h2 { font-size: 13px; font-weight: 700; color: #374151; margin: 0 0 8px; padding-left: 8px; border-left: 3px solid #ef4444; }
+      .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .kw-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+      .kw-tag { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 20px; font-size: 11px; color: #374151; }
+      .kw-tag em { font-style: normal; opacity: 0.5; font-size: 10px; }
+      .kw-top { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+    </style>
+
+    ${kpiGrid}
+
+    <div class="two-col">
+      <div class="section">
+        <h2>조회수 구간 분포</h2>
+        <table><thead><tr><th>구간</th><th>영상 수</th><th>비율</th></tr></thead>
+        <tbody>${bucketRows}</tbody></table>
+      </div>
+      <div class="section">
+        <h2>교육 vs 전체 비교</h2>
+        <table><thead><tr><th>구분</th><th>영상 수</th><th>평균 조회수</th><th>좋아요율</th></tr></thead>
+        <tbody>
+          <tr><td>전체 트렌딩</td><td style="text-align:right">${videos.length}개</td><td style="text-align:right">${formatViewCount(String(Math.round(avgViews)))}</td><td style="text-align:right;color:#ef4444">${avgLikeRate.toFixed(2)}%</td></tr>
+          ${eduRow}
+        </tbody></table>
+        <table style="margin-top:8px"><thead><tr><th>지표</th><th>수치</th></tr></thead>
+        <tbody>
+          <tr><td>평균 댓글율</td><td style="text-align:right">${avgCommentRate.toFixed(3)}%</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>참여도 TOP 5 영상 (좋아요율 기준)</h2>
+      <table><thead><tr><th>#</th><th>제목</th><th>채널</th><th>좋아요율</th><th>댓글율</th></tr></thead>
+      <tbody>${top5Rows}</tbody></table>
+    </div>
+
+    <div class="two-col">
+      <div class="section">
+        <h2>인기 채널 TOP 8</h2>
+        <table><thead><tr><th>#</th><th>채널명</th><th>영상 수</th><th>총 조회수</th></tr></thead>
+        <tbody>${channelRows}</tbody></table>
+      </div>
+      <div class="section">
+        <h2>영상 길이 분포</h2>
+        <table><thead><tr><th>길이 구간</th><th>영상 수</th><th>비율</th></tr></thead>
+        <tbody>${durRows}</tbody></table>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>인기 키워드 TOP ${keywords.length}</h2>
+      <div class="kw-wrap">${keywordTags}</div>
+    </div>`;
+
+  openPrint(`데이터 분석 통합 리포트 · ${regionCode}`, `트렌딩 ${videos.length}개 영상 기반`, body);
+}
+
 // ── Print / PDF helpers ───────────────────────────────────────────────────────
 
 const PRINT_CSS = `
