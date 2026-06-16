@@ -134,6 +134,7 @@ export default function HomePage() {
   const [educationError, setEducationError] = useState<string | null>(null);
 
   const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null);
+  const [pendingChannelId, setPendingChannelId] = useState<string | undefined>();
   const [selectedAiVideo, setSelectedAiVideo] = useState<YouTubeVideo | null>(null);
 
   const fetchTrending = useCallback(async (key: string, region: string, catId: string, count: number) => {
@@ -339,7 +340,9 @@ export default function HomePage() {
             )}
 
             {/* Analysis pages */}
-            {apiKey && !isSettings && sideMenu === 'channel' && <ChannelAnalysis apiKey={apiKey} />}
+            {apiKey && !isSettings && sideMenu === 'channel' && (
+              <ChannelAnalysis apiKey={apiKey} initialChannelId={pendingChannelId} />
+            )}
             {apiKey && !isSettings && sideMenu === 'video' && <VideoAnalysis apiKey={apiKey} />}
 
             {/* Data analysis pages */}
@@ -368,7 +371,17 @@ export default function HomePage() {
                   <EngagementAnalysis videos={trendingVideos} loading={trendingLoading} />
                 )}
                 {sideMenu === 'content-pattern' && (
-                  <ContentPattern videos={trendingVideos} loading={trendingLoading} />
+                  <ContentPattern
+                    videos={trendingVideos}
+                    loading={trendingLoading}
+                    onChannelClick={(channelId) => {
+                      startTransition(() => {
+                        setPendingChannelId(channelId);
+                        setTopMenu('analysis');
+                        setSideMenu('channel');
+                      });
+                    }}
+                  />
                 )}
                 {sideMenu === 'statistics' && (
                   <StatisticsAnalysis videos={trendingVideos} loading={trendingLoading} />

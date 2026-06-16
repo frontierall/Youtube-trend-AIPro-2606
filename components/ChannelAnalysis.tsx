@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { YouTubeChannel, YouTubeVideo } from '@/types/youtube';
 import { formatViewCount, formatRelativeTime, formatDuration } from '@/lib/formatters';
@@ -8,6 +8,7 @@ import ReportButton from '@/components/ReportButton';
 
 interface Props {
   apiKey: string;
+  initialChannelId?: string;
 }
 
 function extractHandle(input: string): string {
@@ -32,22 +33,22 @@ function StatBox({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function ChannelAnalysis({ apiKey }: Props) {
+export default function ChannelAnalysis({ apiKey, initialChannelId }: Props) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [channel, setChannel] = useState<YouTubeChannel | null>(null);
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  const doSearch = useCallback(async (q: string) => {
+    if (!q.trim()) return;
     setLoading(true);
     setError(null);
     setChannel(null);
     setVideos([]);
 
     try {
-      const handle = extractHandle(query.trim());
+      const handle = extractHandle(q.trim());
       const res = await fetch(`/api/channel?handle=${encodeURIComponent(handle)}`, {
         headers: { 'x-youtube-api-key': apiKey },
       });
@@ -60,7 +61,18 @@ export default function ChannelAnalysis({ apiKey }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiKey]);
+
+  const handleSearch = () => doSearch(query);
+
+  // 채널 ID가 외부에서 주입되면 자동 검색
+  useEffect(() => {
+    if (initialChannelId) {
+      setQuery(initialChannelId);
+      doSearch(initialChannelId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialChannelId]);
 
   const avatar =
     channel?.snippet.thumbnails.high?.url ||
