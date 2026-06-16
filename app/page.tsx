@@ -12,6 +12,9 @@ import ChannelAnalysis from '@/components/ChannelAnalysis';
 import VideoAnalysis from '@/components/VideoAnalysis';
 import ReportButton from '@/components/ReportButton';
 import KeywordAnalysis from '@/components/KeywordAnalysis';
+import TrendSnapshot from '@/components/data-analysis/TrendSnapshot';
+import EngagementAnalysis from '@/components/data-analysis/EngagementAnalysis';
+import ContentPattern from '@/components/data-analysis/ContentPattern';
 import SettingsPage, {
   DEFAULT_APP_SETTINGS,
   type AppSettings,
@@ -20,7 +23,10 @@ import SettingsPage, {
 import { useApiKey } from '@/hooks/useApiKey';
 import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
 
-type SideMenu = 'trending-all' | 'trending-education' | 'keyword' | 'channel' | 'video';
+type SideMenu =
+  | 'trending-all' | 'trending-education' | 'keyword'
+  | 'channel' | 'video'
+  | 'snapshot' | 'engagement' | 'content-pattern';
 
 const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: string; icon: string }[]> = {
   trend: [
@@ -31,6 +37,11 @@ const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: st
   analysis: [
     { id: 'channel', label: '채널 분석', icon: '📺' },
     { id: 'video', label: '영상 분석', icon: '🎬' },
+  ],
+  'data-analysis': [
+    { id: 'snapshot', label: '트렌드 스냅샷', icon: '📊' },
+    { id: 'engagement', label: '참여도 분석', icon: '📈' },
+    { id: 'content-pattern', label: '콘텐츠 패턴', icon: '🎯' },
   ],
 };
 
@@ -289,6 +300,22 @@ export default function HomePage() {
             {/* Analysis pages */}
             {apiKey && !isSettings && sideMenu === 'channel' && <ChannelAnalysis apiKey={apiKey} />}
             {apiKey && !isSettings && sideMenu === 'video' && <VideoAnalysis apiKey={apiKey} />}
+
+            {/* Data analysis pages */}
+            {apiKey && !isSettings && sideMenu === 'snapshot' && (
+              <TrendSnapshot
+                videos={trendingVideos}
+                eduVideos={educationVideos}
+                regionCode={regionCode}
+                loading={trendingLoading}
+              />
+            )}
+            {apiKey && !isSettings && sideMenu === 'engagement' && (
+              <EngagementAnalysis videos={trendingVideos} loading={trendingLoading} />
+            )}
+            {apiKey && !isSettings && sideMenu === 'content-pattern' && (
+              <ContentPattern videos={trendingVideos} loading={trendingLoading} />
+            )}
 
             {/* Keyword analysis */}
             {apiKey && !isSettings && isKeyword && (
