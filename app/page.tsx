@@ -11,20 +11,23 @@ import CommentsModal from '@/components/CommentsModal';
 import ChannelAnalysis from '@/components/ChannelAnalysis';
 import VideoAnalysis from '@/components/VideoAnalysis';
 import ReportButton from '@/components/ReportButton';
+import KeywordAnalysis from '@/components/KeywordAnalysis';
 import { useApiKey } from '@/hooks/useApiKey';
 import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
 
-type SideMenu = 'trending-all' | 'trending-education' | 'channel' | 'video';
+type SideMenu = 'trending-all' | 'trending-education' | 'keyword' | 'channel' | 'video';
 
 const SIDE_MENUS: Record<TopMenu, { id: SideMenu; label: string; icon: string }[]> = {
   trend: [
     { id: 'trending-all', label: '전체 트렌딩 TOP 50', icon: '🔥' },
     { id: 'trending-education', label: '교육 TOP 30', icon: '📚' },
+    { id: 'keyword', label: '키워드 분석', icon: '🔑' },
   ],
   analysis: [
     { id: 'channel', label: '채널 분석', icon: '📺' },
     { id: 'video', label: '영상 분석', icon: '🎬' },
   ],
+  settings: [],
 };
 
 const EDUCATION_CATEGORY_ID = '27';
@@ -177,12 +180,14 @@ export default function HomePage() {
   const handleRefresh = () => {
     if (sideMenu === 'trending-all') fetchTrending(apiKey, regionCode, categoryId, maxResults);
     if (sideMenu === 'trending-education') fetchEducation(apiKey, regionCode);
+    if (sideMenu === 'keyword') fetchTrending(apiKey, regionCode, '', maxResults);
   };
 
   const isTrend = topMenu === 'trend';
-  const videos = sideMenu === 'trending-all' ? trendingVideos : educationVideos;
-  const loading = sideMenu === 'trending-all' ? trendingLoading : educationLoading;
-  const error = sideMenu === 'trending-all' ? trendingError : educationError;
+  const isKeyword = sideMenu === 'keyword';
+  const videos = sideMenu === 'trending-education' ? educationVideos : trendingVideos;
+  const loading = sideMenu === 'trending-education' ? educationLoading : trendingLoading;
+  const error = sideMenu === 'trending-education' ? educationError : trendingError;
   const showFilterBar = isTrend;
 
   if (!loaded) return null;
@@ -248,8 +253,17 @@ export default function HomePage() {
             {apiKey && sideMenu === 'channel' && <ChannelAnalysis apiKey={apiKey} />}
             {apiKey && sideMenu === 'video' && <VideoAnalysis apiKey={apiKey} />}
 
+            {/* Keyword analysis */}
+            {apiKey && isKeyword && (
+              <KeywordAnalysis
+                videos={trendingVideos}
+                regionCode={regionCode}
+                loading={trendingLoading}
+              />
+            )}
+
             {/* Trending content */}
-            {apiKey && isTrend && (
+            {apiKey && isTrend && !isKeyword && (
               <>
                 <div className="flex items-center justify-between mb-4 min-h-[36px]">
                   <div>
