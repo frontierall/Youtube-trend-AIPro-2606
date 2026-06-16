@@ -8,10 +8,11 @@ import { formatViewCount, formatRelativeTime } from '@/lib/formatters';
 interface Props {
   video: YouTubeVideo;
   apiKey: string;
+  maxResults: number;
   onClose: () => void;
 }
 
-export default function CommentsModal({ video, apiKey, onClose }: Props) {
+export default function CommentsModal({ video, apiKey, maxResults, onClose }: Props) {
   const [comments, setComments] = useState<YouTubeCommentThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function CommentsModal({ video, apiKey, onClose }: Props) {
       setError(null);
       try {
         const res = await fetch(
-          `/api/comments?videoId=${video.id}&maxResults=50`,
+          `/api/comments?videoId=${video.id}&maxResults=${maxResults}`,
           { signal: controller.signal, headers: { 'x-youtube-api-key': apiKey } }
         );
         const data = await res.json();
@@ -44,7 +45,7 @@ export default function CommentsModal({ video, apiKey, onClose }: Props) {
     })();
 
     return () => controller.abort();
-  }, [video.id]);
+  }, [apiKey, maxResults, video.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();

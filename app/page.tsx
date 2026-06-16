@@ -12,12 +12,17 @@ import ChannelAnalysis from '@/components/ChannelAnalysis';
 import VideoAnalysis from '@/components/VideoAnalysis';
 import ReportButton from '@/components/ReportButton';
 import KeywordAnalysis from '@/components/KeywordAnalysis';
+import SettingsPage, {
+  DEFAULT_APP_SETTINGS,
+  type AppSettings,
+  loadAppSettings,
+} from '@/components/settings/SettingsPage';
 import { useApiKey } from '@/hooks/useApiKey';
 import { YouTubeVideo, YouTubeCategory } from '@/types/youtube';
 
 type SideMenu = 'trending-all' | 'trending-education' | 'keyword' | 'channel' | 'video';
 
-const SIDE_MENUS: Record<TopMenu, { id: SideMenu; label: string; icon: string }[]> = {
+const SIDE_MENUS: Record<Exclude<TopMenu, 'settings'>, { id: SideMenu; label: string; icon: string }[]> = {
   trend: [
     { id: 'trending-all', label: '전체 트렌딩 TOP 50', icon: '🔥' },
     { id: 'trending-education', label: '교육 TOP 30', icon: '📚' },
@@ -27,7 +32,6 @@ const SIDE_MENUS: Record<TopMenu, { id: SideMenu; label: string; icon: string }[
     { id: 'channel', label: '채널 분석', icon: '📺' },
     { id: 'video', label: '영상 분석', icon: '🎬' },
   ],
-  settings: [],
 };
 
 const EDUCATION_CATEGORY_ID = '27';
@@ -79,6 +83,8 @@ export default function HomePage() {
   const { apiKey, saveKey, clearKey, loaded } = useApiKey();
   const [bannerOpen, setBannerOpen] = useState(false);
   const showBanner = !apiKey || bannerOpen;
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
 
   // Navigation
   const [topMenu, setTopMenu] = useState<TopMenu>('trend');
@@ -129,18 +135,29 @@ export default function HomePage() {
 
   const initialized = useRef(false);
 
-  const initData = useCallback((key: string, region: string, count: number) => {
+  useEffect(() => {
+    if (!loaded || settingsLoaded) return;
+    queueMicrotask(() => {
+      const savedSettings = loadAppSettings();
+      setSettings(savedSettings);
+      setRegionCode(savedSettings.defaultRegionCode);
+      setCategoryId(savedSettings.defaultCategoryId);
+      setSettingsLoaded(true);
+    });
+  }, [loaded, settingsLoaded]);
+
+  const initData = useCallback((key: string, region: string, catId: string, count: number) => {
     initialized.current = true;
     fetchCategories(key, region);
-    fetchTrending(key, region, '', count);
+    fetchTrending(key, region, catId, count);
     fetchEducation(key, region);
   }, [fetchCategories, fetchTrending, fetchEducation]);
 
   useEffect(() => {
-    if (!loaded || !apiKey || initialized.current) return;
-    initData(apiKey, regionCode, maxResults);
+    if (!loaded || !settingsLoaded || !apiKey || initialized.current) return;
+    initData(apiKey, regionCode, categoryId, maxResults);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, apiKey]);
+  }, [loaded, settingsLoaded, apiKey]);
 
   const prevRegion = useRef(regionCode);
   useEffect(() => {
@@ -167,14 +184,20 @@ export default function HomePage() {
   const handleTopMenuChange = (menu: TopMenu) => {
     startTransition(() => {
       setTopMenu(menu);
-      setSideMenu(SIDE_MENUS[menu][0].id);
+      if (menu !== 'settings') setSideMenu(SIDE_MENUS[menu][0].id);
     });
   };
 
   const handleSaveKey = (key: string) => {
     saveKey(key);
     setBannerOpen(false);
-    if (!initialized.current) initData(key, regionCode, maxResults);
+    if (!initialized.current) initData(key, regionCode, categoryId, maxResults);
+  };
+
+  const handleSettingsChange = (nextSettings: AppSettings) => {
+    setSettings(nextSettings);
+    setRegionCode(nextSettings.defaultRegionCode);
+    setCategoryId(nextSettings.defaultCategoryId);
   };
 
   const handleRefresh = () => {
@@ -184,13 +207,14 @@ export default function HomePage() {
   };
 
   const isTrend = topMenu === 'trend';
+  const isSettings = topMenu === 'settings';
   const isKeyword = sideMenu === 'keyword';
   const videos = sideMenu === 'trending-education' ? educationVideos : trendingVideos;
   const loading = sideMenu === 'trending-education' ? educationLoading : trendingLoading;
   const error = sideMenu === 'trending-education' ? educationError : trendingError;
   const showFilterBar = isTrend;
 
-  if (!loaded) return null;
+  if (!loaded || !settingsLoaded) return null;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -212,16 +236,18 @@ export default function HomePage() {
       {/* Body: sidebar + content */}
       <div className="flex flex-1">
         {/* Left sidebar (하위 카테고리) */}
-        <SideNav
-          items={SIDE_MENUS[topMenu]}
-          active={sideMenu}
-          onChange={(id) => startTransition(() => setSideMenu(id as SideMenu))}
-        />
+        {!isSettings && (
+          <SideNav
+            items={SIDE_MENUS[topMenu]}
+            active={sideMenu}
+            onChange={(id) => startTransition(() => setSideMenu(id as SideMenu))}
+          />
+        )}
 
         {/* Right content */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* FilterBar — trend only, sticky */}
-          {showFilterBar && (
+          {showFilterBar && !isSettings && (
             <FilterBar
               regionCode={regionCode}
               categoryId={categoryId}
@@ -240,7 +266,7 @@ export default function HomePage() {
           {/* Main content */}
           <main className="flex-1 px-5 py-5">
             {/* No key */}
-            {!apiKey && (
+            {!apiKey && !isSettings && (
               <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-300">
                 <svg className="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
@@ -249,12 +275,23 @@ export default function HomePage() {
               </div>
             )}
 
+            {isSettings && (
+              <SettingsPage
+                apiKey={apiKey}
+                categories={categories}
+                settings={settings}
+                onSettingsChange={handleSettingsChange}
+                onSaveApiKey={handleSaveKey}
+                onClearApiKey={clearKey}
+              />
+            )}
+
             {/* Analysis pages */}
-            {apiKey && sideMenu === 'channel' && <ChannelAnalysis apiKey={apiKey} />}
-            {apiKey && sideMenu === 'video' && <VideoAnalysis apiKey={apiKey} />}
+            {apiKey && !isSettings && sideMenu === 'channel' && <ChannelAnalysis apiKey={apiKey} />}
+            {apiKey && !isSettings && sideMenu === 'video' && <VideoAnalysis apiKey={apiKey} />}
 
             {/* Keyword analysis */}
-            {apiKey && isKeyword && (
+            {apiKey && !isSettings && isKeyword && (
               <KeywordAnalysis
                 videos={trendingVideos}
                 regionCode={regionCode}
@@ -263,7 +300,7 @@ export default function HomePage() {
             )}
 
             {/* Trending content */}
-            {apiKey && isTrend && !isKeyword && (
+            {apiKey && !isSettings && isTrend && !isKeyword && (
               <>
                 <div className="flex items-center justify-between mb-4 min-h-[36px]">
                   <div>
@@ -331,6 +368,7 @@ export default function HomePage() {
         <CommentsModal
           video={selectedVideo}
           apiKey={apiKey}
+          maxResults={settings.commentLimit}
           onClose={() => setSelectedVideo(null)}
         />
       )}

@@ -1,8 +1,9 @@
-export type TopMenu = 'trend' | 'analysis';
+export type TopMenu = 'trend' | 'analysis' | 'settings';
 
 const ITEMS: { id: TopMenu; label: string; icon: string }[] = [
   { id: 'trend', label: '트렌드', icon: '🔥' },
   { id: 'analysis', label: '채널 및 영상 분석', icon: '📊' },
+  { id: 'settings', label: '설정', icon: '⚙️' },
 ];
 
 interface Props {

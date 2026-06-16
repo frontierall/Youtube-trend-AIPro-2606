@@ -9,8 +9,10 @@ export function useApiKey() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    setApiKeyState(localStorage.getItem(LS_KEY) ?? '');
-    setLoaded(true);
+    queueMicrotask(() => {
+      setApiKeyState(localStorage.getItem(LS_KEY) ?? '');
+      setLoaded(true);
+    });
   }, []);
 
   const saveKey = (key: string) => {
